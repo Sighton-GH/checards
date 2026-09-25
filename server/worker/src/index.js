@@ -57,6 +57,11 @@ export default {
     if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
 
     if (url.pathname === '/api/rooms' && request.method === 'POST') {
+      // M2: per-IP room-creation quota, enforced by the Lobby DO
+      const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+      const rl = await env.LOBBY.get(env.LOBBY.idFromName('lobby'))
+        .fetch('https://lobby/ratelimit', { method: 'POST', body: JSON.stringify({ ip }) });
+      if (rl.status === 429) return json({ error: 'rate limit: too many rooms created, try again later' }, 429);
       const body = await request.json().catch(() => ({}));
       const visibility = body.visibility === 'public' ? 'public' : 'private';
       const side = ['red', 'black', 'random'].includes(body.side) ? body.side : 'random';
@@ -115,21 +120,27 @@ export class GameRoom {
   // action fully determine the game (draw piles are shuffled from the seed).
   // On a cold start after hibernation we rebuild by replaying the action log,
   // so a room survives Durable Object eviction at any point mid-game.
+  // One opaque engine handle PER ROOM (audit C1): the module is shared across
+  // the isolate, but every game lives behind its own cs_new handle, so rooms
+  // can never see or corrupt each other's state.
   async engine() {
     if (!this.M) {
       this.M = await getEngine();
       this.replay = (await this.state.storage.get('replay')) || { seed: (Date.now() & 0x7fffffff) >>> 0, actions: [] };
-      this.M.ccall('cs_new', 'number', ['number'], [this.replay.seed]);
-      for (const a of this.replay.actions) this.applyRaw(a);
+      this.handle = this.M.ccall('cs_new', 'number', ['number'], [this.replay.seed]);
+      for (let i = 0; i < this.replay.actions.length; i++) {
+        if (!this.applyRaw(this.replay.actions[i]))
+          throw new Error(`replay diverged at action ${i} - refusing to serve a corrupt room`);
+      }
     }
     return this.M;
   }
 
   applyRaw(a) {
-    const M = this.M;
-    if (a.t === 'place') return M.ccall('cs_place', 'number', ['number', 'number', 'number'], [a.side, a.x, a.y]);
-    if (a.t === 'draft') return M.ccall('cs_draft', 'number', ['number', 'number'], [a.side, a.idx]);
-    return M.ccall('cs_act', 'number', ['number', 'number'], [a.side, a.idx]);
+    const M = this.M, h = this.handle;
+    if (a.t === 'place') return M.ccall('cs_place', 'number', ['number', 'number', 'number', 'number'], [h, a.side, a.x, a.y]);
+    if (a.t === 'draft') return M.ccall('cs_draft', 'number', ['number', 'number', 'number'], [h, a.side, a.idx]);
+    return M.ccall('cs_act', 'number', ['number', 'number', 'number'], [h, a.side, a.idx]);
   }
 
   async record(a) {
@@ -138,9 +149,8 @@ export class GameRoom {
   }
 
   stateFor(M, role) {
-    const fn = role === 'spec' ? 'cs_state_spec' : 'cs_state';
-    const args = role === 'spec' ? [] : [role === 'red' ? 0 : 1];
-    return JSON.parse(M.ccall(fn, 'string', ['number'], args));
+    if (role === 'spec') return JSON.parse(M.ccall('cs_state_spec', 'string', ['number'], [this.handle]));
+    return JSON.parse(M.ccall('cs_state', 'string', ['number', 'number'], [this.handle, role === 'red' ? 0 : 1]));
   }
 
   broadcast(msg) {
@@ -271,6 +281,17 @@ export class Lobby {
       const { code } = await request.json();
       delete rooms[code];
       await this.state.storage.put('rooms', rooms);
+      return json({ ok: true });
+    }
+    if (url.pathname === '/ratelimit' && request.method === 'POST') {
+      const { ip } = await request.json();
+      const quotas = (await this.state.storage.get('quotas')) || {};
+      const now = Date.now(), windowMs = 3600 * 1000, cap = 20;
+      const hits = (quotas[ip] || []).filter(t => now - t < windowMs);
+      if (hits.length >= cap) return json({ ok: false }, 429);
+      hits.push(now);
+      quotas[ip] = hits;
+      await this.state.storage.put('quotas', quotas);
       return json({ ok: true });
     }
     if (url.pathname === '/list') {

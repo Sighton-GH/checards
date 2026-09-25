@@ -100,5 +100,47 @@ else ok(`red acted; mover ${rs.mover}->${after.mover}, movesRemaining ${rs.moves
 const pres = p1.msgs.findLast(m => m.t === 'presence');
 if (!pres || pres.spectators < 1) fail('presence: ' + JSON.stringify(pres)); else ok(`presence: ${JSON.stringify(pres)}`);
 
+// C1 regression: a second room in the same isolate must not disturb the first
+const createdB = await (await fetch(BASE + '/api/rooms', {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ visibility: 'private', side: 'black' }),
+})).json();
+if (!createdB.room || createdB.room === created.room) fail('room B create');
+const b1 = await new Promise((resolve, reject) => {
+  const ws = new WebSocket(`ws://localhost:8787/ws/rooms/${createdB.room}?token=${createdB.token}`);
+  const msgs = [];
+  ws.onmessage = ev => msgs.push(JSON.parse(ev.data));
+  ws.onerror = reject;
+  ws.onopen = () => resolve({ ws, msgs, send: o => ws.send(JSON.stringify(o)),
+    async state() { for (;;) { const m = msgs.findLast(m => m.t === 'state'); if (m) return m.view; await new Promise(r => setTimeout(r, 100)); } } });
+});
+// drive room B several setup steps
+for (let i = 0; i < 4; i++) {
+  const st = await b1.state();
+  if (st.phase === 'setup_place') {
+    outer: for (let x = 0; x < 7; x++) for (let y = 0; y < 7; y++) {
+      b1.send({ t: 'place', x, y }); await new Promise(r => setTimeout(r, 50));
+      const s2 = await b1.state(); if (s2 !== st) break outer;
+    }
+  } else if (st.phase === 'setup_draft') { b1.send({ t: 'draft', idx: 0 }); await new Promise(r => setTimeout(r, 50)); }
+}
+// room A must be exactly where we left it: play phase, black to move (red spawned)
+const aNow = await red.state();
+const aSpecNow = await spec.state();
+if (aNow.gamePhase !== 'play' || aNow.mover !== 1 || aNow.turn !== 1) {
+  fail(`C1: room A corrupted by room B activity (phase=${aNow.gamePhase} mover=${aNow.mover} turn=${aNow.turn})`);
+} else ok('C1: room A untouched by room B (play, black to move, turn 1)');
+if (aSpecNow.gamePhase !== 'play' || aSpecNow.mover !== 1) fail('C1: room A spectator view corrupted');
+// and A can still act: black moves
+const bm = await black.state();
+if (bm.legal.length) {
+  black.send({ t: 'act', idx: 0 });
+  await new Promise(r => setTimeout(r, 400));
+  const afterB = await black.state();
+  if (afterB.mover === bm.mover && afterB.movesRemaining === bm.movesRemaining) fail('C1: room A black act ignored');
+  else ok('C1: room A continues after cross-room traffic');
+}
+b1.ws.close();
+
 console.log(failures ? `${failures} FAILURES` : 'LIVE WORKER TEST PASS');
 process.exit(failures ? 1 : 0);

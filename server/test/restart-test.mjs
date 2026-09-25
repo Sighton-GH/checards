@@ -40,6 +40,7 @@ if (mode === 'create') {
   await new Promise(r => setTimeout(r, 400));
   st = await red.state();
   console.log(JSON.stringify({ room: created.room, redToken: created.token, blackToken: btok, turn: st.turn, mover: st.mover, phase: st.gamePhase }));
+  process.exit(0); // close websockets explicitly so the script terminates
 } else {
   const red = await connect(room0, `token=${tokR}`);
   const black = await connect(room0, `token=${tokB}`);
