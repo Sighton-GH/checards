@@ -63,3 +63,13 @@ now: tokens are unguessable UUIDs, they grant only one seat in one room (no
 account, no cross-room power), and a room's tokens die with the room. If we
 ever add accounts or persistent identity, move the token to a subprotocol or
 header during the WS handshake.
+
+### Accepted residual: engine handles across DO eviction
+
+`getEngine()` caches one wasm instance per isolate, and `cs_new` handles live
+in that shared heap. A Durable Object evicted while its isolate survives
+cannot free its old handle (the handle value dies with the DO), so each cold
+start leaks one Game's heap. Impact is self-bounding (tens of KB per
+eviction, reclaimed when the isolate recycles). The clean fix - persisting
+the handle id in DO storage and freeing on re-init - is deliberately not
+taken yet.

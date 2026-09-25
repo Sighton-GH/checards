@@ -126,12 +126,9 @@ export class GameRoom {
   async engine() {
     if (this.M) return this.M;
     const M = await getEngine();
-    // N1: a previous handle allocated on this (cached) wasm heap must be
-    // freed before re-init, or every cold start leaks one Game.
-    if (this.handle) {
-      try { M.ccall('cs_free', 'void', ['number'], [this.handle]); } catch {}
-      this.handle = 0;
-    }
+    // Residual, accepted: if this DO is evicted while the isolate's cached
+    // wasm module survives, the old handle stays allocated in the shared
+    // heap (self-bounding; reclaimed on isolate recycle). See DEPLOY.md.
     this.replay = (await this.state.storage.get('replay')) || { seed: (Date.now() & 0x7fffffff) >>> 0, actions: [] };
     const h = M.ccall('cs_new', 'number', ['number'], [this.replay.seed]);
     this.M = M;
