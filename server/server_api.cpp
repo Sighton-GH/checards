@@ -228,6 +228,15 @@ int cs_act(uintptr_t h, int side, int idx) {
     if (idx < 0 || idx >= (int)legal.size()) return 0;
     step(g, legal[idx]); return 1;
 }
+// Forfeit: resigning side loses immediately. Replayed like any other action.
+int cs_resign(uintptr_t h, int side) {
+    Game* g = game(h);
+    if (!g || g->phase == "over") return 0;
+    g->board.endCondition = (side == 0) ? EndCondition::BlackWins : EndCondition::RedWins;
+    logEvBoth(g, std::string("{\"ev\":\"resign\",\"side\":") + std::to_string(side) + "}");
+    finishIfOver(g);
+    return 1;
+}
 // Perspective-filtered state for `side` (0 = Red, 1 = Black).
 const char* cs_state(uintptr_t h, int side) {
     Game* g = game(h);

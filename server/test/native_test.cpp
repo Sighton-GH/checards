@@ -13,6 +13,7 @@ void cs_free(uintptr_t h);
 int cs_place(uintptr_t h, int side, int x, int y);
 int cs_draft(uintptr_t h, int side, int idx);
 int cs_act(uintptr_t h, int side, int idx);
+int cs_resign(uintptr_t h, int side);
 const char* cs_state(uintptr_t h, int side);
 const char* cs_state_spec(uintptr_t h);
 const char* cs_log(uintptr_t h, int side);
@@ -151,6 +152,14 @@ int main(int argc, char** argv) {
     printf("game over: result=%s moves=%d\n", res.c_str(), moves);
     CHECK(res != "0", "game terminates");
     CHECK(moves > 5, "game had real moves");
+    // resign: Red resigns -> Black wins (EndCondition 2); resign after over rejected
+    uintptr_t hr = cs_new(55);
+    CHECK(cs_resign(hr, 0) == 1, "resign accepted");
+    CHECK(field(cs_state(hr, 0), "result") == "2", "resign -> Black wins");
+    CHECK(field(cs_state(hr, -1), "result") == "2", "spectator sees resign result");
+    CHECK(cs_resign(hr, 1) == 0, "resign after over rejected");
+    cs_free(hr);
+
     if (failures == 0) printf("ALL CHECKS PASS\n");
     return failures ? 1 : 0;
 }

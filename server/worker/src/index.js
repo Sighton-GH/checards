@@ -140,6 +140,7 @@ export class GameRoom {
     const M = this.M, h = this.handle;
     if (a.t === 'place') return M.ccall('cs_place', 'number', ['number', 'number', 'number', 'number'], [h, a.side, a.x, a.y]);
     if (a.t === 'draft') return M.ccall('cs_draft', 'number', ['number', 'number', 'number'], [h, a.side, a.idx]);
+    if (a.t === 'resign') return M.ccall('cs_resign', 'number', ['number', 'number'], [h, a.side]);
     return M.ccall('cs_act', 'number', ['number', 'number', 'number'], [h, a.side, a.idx]);
   }
 
@@ -258,11 +259,16 @@ export class GameRoom {
     if (msg.t === 'place') action = { t: 'place', side, x: msg.x | 0, y: msg.y | 0 };
     else if (msg.t === 'draft') action = { t: 'draft', side, idx: msg.idx | 0 };
     else if (msg.t === 'act') action = { t: 'act', side, idx: msg.idx | 0 };
-    else if (msg.t === 'resign') { send({ t: 'error', msg: 'resign not implemented yet' }); return; }
+    else if (msg.t === 'resign') action = { t: 'resign', side };
     else { send({ t: 'error', msg: 'unknown message type' }); return; }
     if (!this.applyRaw(action)) { send({ t: 'error', msg: 'illegal or out-of-turn action' }); return; }
     await this.record(action);
     this.broadcastState(M);
+    const st = this.stateFor(M, 'spec');
+    if (st.gamePhase === 'over' && this.meta.visibility === 'public') {
+      await this.env.LOBBY.get(this.env.LOBBY.idFromName('lobby'))
+        .fetch('https://lobby/unregister', { method: 'POST', body: JSON.stringify({ code: this.meta.code }) });
+    }
   }
 }
 
@@ -295,7 +301,12 @@ export class Lobby {
       return json({ ok: true });
     }
     if (url.pathname === '/list') {
-      return json({ rooms: Object.values(rooms).sort((a, b) => b.registeredAt - a.registeredAt).slice(0, 50) });
+      const fresh = Object.values(rooms).filter(r => Date.now() - r.registeredAt < 3 * 3600 * 1000);
+      if (fresh.length !== Object.keys(rooms).length) {
+        rooms = Object.fromEntries(fresh.map(r => [r.code, r]));
+        await this.state.storage.put('rooms', rooms);
+      }
+      return json({ rooms: fresh.sort((a, b) => b.registeredAt - a.registeredAt).slice(0, 50) });
     }
     return new Response('not found', { status: 404 });
   }

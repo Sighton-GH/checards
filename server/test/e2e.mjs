@@ -10,6 +10,7 @@ const cs_free = cwrap('cs_free', null, ['number']);
 const cs_place = cwrap('cs_place', 'number', ['number', 'number', 'number', 'number']);
 const cs_draft = cwrap('cs_draft', 'number', ['number', 'number', 'number']);
 const cs_act = cwrap('cs_act', 'number', ['number', 'number', 'number']);
+const cs_resign = cwrap('cs_resign', 'number', ['number', 'number']);
 const cs_state = (h, s) => JSON.parse(cwrap('cs_state', 'string', ['number', 'number'])(h, s));
 const cs_state_spec = h => JSON.parse(cwrap('cs_state_spec', 'string', ['number'])(h));
 const cs_log = (h, s) => JSON.parse(cwrap('cs_log', 'string', ['number', 'number'])(h, s));
@@ -70,5 +71,16 @@ leakLog(cs_log(h1, 0), 0, 'final log(red)'); leakLog(cs_log(h1, 1), 1, 'final lo
 console.log(`game over: result=${cs_state(h1, 0).result} moves=${moves}`);
 if (cs_state(h1, 0).result === 0) fail('game did not terminate');
 if (moves <= 5) fail('trivial game');
+// resign: Black resigns -> Red wins (result 1); rejected after over
+{
+  const hr = cs_new(55);
+  if (cs_resign(hr, 1) !== 1) fail('resign rejected in live game');
+  const st = cs_state(hr, 0);
+  if (st.gamePhase !== 'over' || st.result !== 1) fail(`resign -> expected over/1, got ${st.gamePhase}/${st.result}`);
+  if (cs_state_spec(hr).result !== 1) fail('spectator misses resign result');
+  if (cs_resign(hr, 0) !== 0) fail('resign after over not rejected');
+  cs_free(hr);
+}
+
 console.log(failures ? `${failures} FAILURES` : 'WORKER-ARTIFACT E2E PASS');
 process.exit(failures ? 1 : 0);

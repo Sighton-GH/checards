@@ -142,5 +142,22 @@ if (bm.legal.length) {
 }
 b1.ws.close();
 
+// resign flow: black resigns -> red wins; double resign errors; public room leaves lobby
+black.send({ t: 'resign' });
+await new Promise(r => setTimeout(r, 700));
+const overSt = await red.state();
+if (overSt.gamePhase !== 'over' || overSt.result !== 1) {
+  fail(`resign: expected over/result=1, got ${overSt.gamePhase}/${overSt.result}`);
+} else ok('resign: game over, Red wins');
+const specOver = await spec.state();
+if (specOver.gamePhase !== 'over' || specOver.result !== 1) fail('resign: spectator view not updated'); else ok('resign: spectator sees result');
+const errBefore = black.msgs.filter(m => m.t === 'error').length;
+black.send({ t: 'resign' });
+await new Promise(r => setTimeout(r, 400));
+if (black.msgs.filter(m => m.t === 'error').length <= errBefore) fail('double resign produced no error'); else ok('double resign rejected');
+await new Promise(r => setTimeout(r, 500));
+const lobbyAfter = await (await fetch(BASE + '/api/rooms')).json();
+if (lobbyAfter.rooms?.some(r => r.code === created.room)) fail('finished room still in lobby'); else ok('finished room unregistered from lobby');
+
 console.log(failures ? `${failures} FAILURES` : 'LIVE WORKER TEST PASS');
 process.exit(failures ? 1 : 0);
