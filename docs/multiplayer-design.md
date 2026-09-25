@@ -75,3 +75,12 @@ Reconnect: client resends {t:"join", room} + token; server resumes stream.
 - Two-client e2e game to completion; disconnect/rejoin mid-game; simultaneous
   connect race on join.
 - Load: trivial (2 clients/room), but DO hibernation/resume correctness matters.
+
+### Accepted risk: player tokens in the WebSocket query string
+
+Players authenticate to a room socket as `wss://<host>/ws/rooms/<code>?token=<uuid>`.
+Query strings can land in access logs and browser history. We accept this for
+now: tokens are unguessable UUIDs, they grant only one seat in one room (no
+account, no cross-room power), and a room's tokens die with the room. If we
+ever add accounts or persistent identity, move the token to a subprotocol or
+header during the WS handshake.

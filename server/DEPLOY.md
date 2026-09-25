@@ -54,3 +54,12 @@ Then connect a WebSocket to `wss://checards.sighton.ca/ws/rooms/<CODE>?token=<TO
 - Rooms are event-sourced: a game survives server restarts/hibernation.
 - Engine/protocol conformance tests: `node server/test/e2e.mjs` from the repo
   root (uses the committed wasm module, no worker needed).
+
+### Accepted risk: player tokens in the WebSocket query string
+
+Players authenticate to a room socket as `wss://<host>/ws/rooms/<code>?token=<uuid>`.
+Query strings can land in access logs and browser history. We accept this for
+now: tokens are unguessable UUIDs, they grant only one seat in one room (no
+account, no cross-room power), and a room's tokens die with the room. If we
+ever add accounts or persistent identity, move the token to a subprotocol or
+header during the WS handshake.

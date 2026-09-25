@@ -124,14 +124,30 @@ export class GameRoom {
   // the isolate, but every game lives behind its own cs_new handle, so rooms
   // can never see or corrupt each other's state.
   async engine() {
-    if (!this.M) {
-      this.M = await getEngine();
-      this.replay = (await this.state.storage.get('replay')) || { seed: (Date.now() & 0x7fffffff) >>> 0, actions: [] };
-      this.handle = this.M.ccall('cs_new', 'number', ['number'], [this.replay.seed]);
+    if (this.M) return this.M;
+    const M = await getEngine();
+    // N1: a previous handle allocated on this (cached) wasm heap must be
+    // freed before re-init, or every cold start leaks one Game.
+    if (this.handle) {
+      try { M.ccall('cs_free', 'void', ['number'], [this.handle]); } catch {}
+      this.handle = 0;
+    }
+    this.replay = (await this.state.storage.get('replay')) || { seed: (Date.now() & 0x7fffffff) >>> 0, actions: [] };
+    const h = M.ccall('cs_new', 'number', ['number'], [this.replay.seed]);
+    this.M = M;
+    this.handle = h;
+    try {
       for (let i = 0; i < this.replay.actions.length; i++) {
         if (!this.applyRaw(this.replay.actions[i]))
           throw new Error(`replay diverged at action ${i} - refusing to serve a corrupt room`);
       }
+    } catch (e) {
+      // N2: never serve a corrupt room on the warm path - free the handle
+      // and drop M/handle so the next request re-initializes cleanly.
+      try { M.ccall('cs_free', 'void', ['number'], [h]); } catch {}
+      this.M = null;
+      this.handle = 0;
+      throw e;
     }
     return this.M;
   }
@@ -297,6 +313,11 @@ export class Lobby {
       if (hits.length >= cap) return json({ ok: false }, 429);
       hits.push(now);
       quotas[ip] = hits;
+      // prune idle keys so the map cannot grow one entry per IP forever
+      for (const k of Object.keys(quotas)) {
+        quotas[k] = quotas[k].filter(t => now - t < windowMs);
+        if (!quotas[k].length) delete quotas[k];
+      }
       await this.state.storage.put('quotas', quotas);
       return json({ ok: true });
     }
