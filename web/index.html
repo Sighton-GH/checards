@@ -151,12 +151,49 @@ select{width:100%;background:#1f1d1a;color:var(--text);border:1px solid var(--li
 .sheet .sub{font-size:12px;color:var(--muted);margin-bottom:12px}
 .draft-cards{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;max-width:430px;max-height:52vh;overflow-y:auto}
 
-.help h3{margin:14px 0 5px;font-size:13.5px}
-.help h3:first-child{margin-top:2px}
-.help p,.help li{font-size:13px;line-height:1.55;color:#d9d4ca;margin:4px 0}
-.help ul{margin:4px 0;padding-left:18px}
-.help .legend{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:8px 0 2px}
-.help .leg{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+/* --- interactive help guide (owns #pane-help) --- */
+.guide{--msq:44px}
+@media(max-width:480px){.guide{--msq:37px}}
+.g-steps{display:flex;flex-wrap:wrap;gap:5px;list-style:none;margin:0 0 2px;padding:0}
+.g-dot{background:#1f1d1a;border:1px solid var(--line);color:var(--muted);border-radius:20px;padding:4px 10px;font-size:11.5px;font-weight:600;font-family:inherit;cursor:pointer}
+.g-dot:hover{color:var(--text)}
+.g-dot .gn{opacity:.7;margin-right:4px}
+.g-dot[aria-current="step"]{background:var(--accent);border-color:var(--accent-d);color:#fff}
+.g-dot:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.g-step{display:none}
+.g-step.active{display:block}
+.g-step h3{margin:6px 0 2px;font-size:14.5px}
+.g-step h3:focus{outline:none}
+.g-step h3:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.g-step p,.g-step li{font-size:13px;line-height:1.55;color:#d9d4ca;margin:4px 0}
+.g-step ul{margin:4px 0;padding-left:18px}
+.gdemo{background:#1f1d1a;border:1px solid var(--line);border-radius:9px;padding:12px 10px 6px;margin:8px 0 6px;overflow:hidden}
+.gdemo .cap{text-align:center;font-size:12px;color:var(--muted);margin:8px 0 2px;min-height:2.4em;line-height:1.35}
+.mini{position:relative;display:grid;width:max-content;margin:0 auto;border-radius:6px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.msq{width:var(--msq);height:var(--msq);position:relative;display:flex;align-items:center;justify-content:center}
+.msq.l{background:var(--sq-l)} .msq.d{background:var(--sq-d)}
+.msq.sp::after{content:'';position:absolute;inset:12%;border:2px dashed rgba(255,255,255,.85);border-radius:12%;pointer-events:none}
+.msq.cb{box-shadow:inset 0 0 0 3px var(--danger)}
+.mstack{display:flex;align-items:center;justify-content:center;max-width:98%}
+.mstack .pc+.pc{margin-left:-.9em}
+.fly{position:absolute;left:0;top:0;width:var(--msq);height:var(--msq);display:flex;align-items:center;justify-content:center;z-index:3;pointer-events:none;transform:translate(calc(var(--fx,0)*var(--msq) + var(--ox,0px)),calc(var(--fy,0)*var(--msq) + var(--oy,0px)));transition:transform .55s ease}
+.gpop{animation:gpop .38s ease}
+@keyframes gpop{0%{transform:scale(.3);opacity:0}70%{transform:scale(1.08)}100%{transform:scale(1)}}
+.gflip{animation:gflip .36s ease}
+@keyframes gflip{50%{transform:scaleX(0)}}
+.gdie{animation:gdie .6s ease forwards}
+@keyframes gdie{25%{transform:translateX(-3px)}55%{transform:translateX(3px)}100%{transform:scale(.6);opacity:0}}
+.gwin{display:block;width:max-content;max-width:100%;margin:8px auto 0;background:#332f26;border:1px solid var(--gold);color:var(--gold);font-size:12.5px;font-weight:700;border-radius:8px;padding:5px 12px}
+.gfade{opacity:0;transition:opacity .3s}
+.g-row{display:flex;gap:18px;flex-wrap:wrap;justify-content:center;align-items:flex-start}
+.g-fig{text-align:center}
+.g-fig .lbl{font-size:11px;color:var(--muted);margin-top:5px}
+.g-fig .cc{display:flex;gap:3px;justify-content:center}
+.guide .legend{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:10px 0 2px}
+.guide .leg{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.g-nav{display:flex;align-items:center;gap:10px;margin-top:8px;padding-top:10px;border-top:1px solid var(--line)}
+.g-nav .g-count{flex:1;text-align:center;font-size:12px;color:var(--muted)}
+.g-nav .btn[disabled]{opacity:.45;cursor:default}
 </style></head>
 <body>
 <header class="topbar">
@@ -206,38 +243,67 @@ select{width:100%;background:#1f1d1a;color:var(--text);border:1px solid var(--li
       </form>
     </div>
     <div class="tab-pane help" id="pane-help" role="tabpanel" aria-labelledby="tab-help">
-      <h3>Goal</h3>
-      <p>Destroy both enemy Aces. If a long stretch passes with no combat, the game is a draw.</p>
-      <h3>Your cards</h3>
-      <p>Each side has 13 cards: a Joker, two Aces, and 9, 10, J, Q, K in each of its two suits. Red plays diamonds and hearts and always moves first; Black plays clubs and spades.</p>
-      <h3>Setup</h3>
-      <p>You place 7 cards, one at a time, on empty squares in your three home rows. Your two Aces go first, then you pick which card to place next. The 6 cards you don't place become your draw pile.</p>
-      <h3>A turn</h3>
-      <ul>
-        <li>You get 3 moves per turn. One move shifts one of your cards to a neighbouring square, in any direction.</li>
-        <li>Up to 4 of your cards can share a square.</li>
-        <li>Or draw instead: as the first thing on your turn, place the top card of your draw pile on an empty square of your back row. That uses your whole turn.</li>
-      </ul>
-      <h3>Combat</h3>
-      <p>Move onto a square that holds enemy cards to attack. Battles are fought at the end of the turn and every card involved is revealed. Each side's stack wins or dies as a whole.</p>
-      <ul>
-        <li>An attacking Ace beats anything except a defending Joker. One attacking Ace trades with it; two attacking Aces destroy it and survive.</li>
-        <li>A defending Joker beats any attack that has no Ace.</li>
-        <li>Otherwise the higher total wins. Aces and Jokers count 1, cards 9 to K count their face value (K&nbsp;=&nbsp;13). A tie destroys both stacks.</li>
-        <li>A card that attacks can't move again that turn.</li>
-      </ul>
-      <h3>Hidden cards</h3>
-      <p>Enemy cards stay face down until they fight in a battle. Cards marked &#128065;&#65039; have been seen by the other side - yours included, so you know what to keep hidden.</p>
-      <h3>Playing here</h3>
-      <ul>
-        <li>Tap one of your cards, then tap a highlighted square to move it. If several cards on that square can make the move, you'll be asked which one.</li>
-        <li>When a draw is available, the empty squares on your back row glow. Tap one to draw there.</li>
-        <li>Your home rows are always at the bottom.</li>
-      </ul>
-      <div class="legend">
-        <span class="leg"><span class="pc rd sm"><span class="rk">Q</span><span class="su">&hearts;</span></span> face-up card</span>
-        <span class="leg"><span class="pc back bb sm"></span> hidden enemy</span>
-        <span class="leg"><span class="pc bk sm"><span class="rk">9</span><span class="su">&clubs;</span><span class="eye">&#128065;&#65039;</span></span> seen in battle</span>
+      <div class="guide" id="helpGuide">
+        <ol class="g-steps" id="gDots" aria-label="Guide sections"></ol>
+        <div class="g-body" id="gBody">
+          <section class="g-step" data-name="Goal">
+            <h3 tabindex="-1">Goal</h3>
+            <div class="gdemo" id="gdGoal"></div>
+            <p>Destroy both enemy Aces to win the game. If the enemy destroys both of yours, you lose.</p>
+            <p>If a long stretch of turns passes with no combat anywhere, the game ends in a draw.</p>
+          </section>
+          <section class="g-step" data-name="Your cards">
+            <h3 tabindex="-1">Your cards</h3>
+            <div class="gdemo" id="gdCards"></div>
+            <p>Each side commands a personal deck of 13 cards: 1 Joker, 2 Aces, and the 9, 10, J, Q and K of its two suits. Ranks 2 to 8 do not exist in Checards.</p>
+            <p>Red plays diamonds and hearts; Black plays clubs and spades. Red always sets up first and moves first.</p>
+          </section>
+          <section class="g-step" data-name="Setup">
+            <h3 tabindex="-1">Setup</h3>
+            <div class="gdemo" id="gdSetup"></div>
+            <p>Place 7 cards, one at a time, on empty squares in your three home rows. Your two Aces must go down first; after that you pick which of your remaining cards to place next.</p>
+            <p>The 6 cards you do not place become your draw pile.</p>
+          </section>
+          <section class="g-step" data-name="A turn">
+            <h3 tabindex="-1">A turn</h3>
+            <div class="gdemo" id="gdMove"></div>
+            <div class="gdemo" id="gdSpawn"></div>
+            <ul>
+              <li>You get 3 moves per turn. One move shifts one of your cards to a neighbouring square, in any direction.</li>
+              <li>Up to 4 of your cards can share a square.</li>
+              <li>Or draw instead: as the first action of your turn, place the top card of your draw pile on an empty square of your back row. Drawing uses your whole turn.</li>
+              <li>If you have no legal action at all, your turn passes.</li>
+            </ul>
+          </section>
+          <section class="g-step" data-name="Combat">
+            <h3 tabindex="-1">Combat</h3>
+            <div class="gdemo" id="gdCombat"></div>
+            <p>Move onto a square that holds enemy cards to attack. A card that attacks cannot move again that turn. Battles are resolved after the turn's moves are done, every card that takes part is revealed, and each stack wins or dies as a whole.</p>
+            <ul>
+              <li>Two attacking Aces overwhelm a defending Joker: the defender dies, the attackers live.</li>
+              <li>One attacking Ace trades with a defending Joker: both sides are destroyed.</li>
+              <li>Any other attack that includes an Ace wins automatically. No counter is possible.</li>
+              <li>A defending Joker beats any attack without an Ace.</li>
+              <li>Otherwise the higher total wins. Aces and Jokers count 1, cards 9 to K count their face value (K = 13). An exact tie destroys both stacks.</li>
+            </ul>
+          </section>
+          <section class="g-step" data-name="Hidden cards">
+            <h3 tabindex="-1">Hidden cards</h3>
+            <div class="gdemo" id="gdHidden"></div>
+            <p>Enemy cards stay face down until they fight in a battle. Combat reveals every card involved, on both sides, even a stack that is destroyed.</p>
+            <p>Cards marked &#128065;&#65039; have been seen by the other side. Your own cards get the mark too once the enemy has seen them, so you know what to keep hidden.</p>
+            <div class="legend">
+              <span class="leg"><span class="pc rd sm"><span class="rk">Q</span><span class="su">&hearts;</span></span> face-up card</span>
+              <span class="leg"><span class="pc back bb sm"></span> hidden enemy</span>
+              <span class="leg"><span class="pc bk sm"><span class="rk">9</span><span class="su">&clubs;</span><span class="eye">&#128065;&#65039;</span></span> seen in battle</span>
+            </div>
+          </section>
+        </div>
+        <div class="g-nav">
+          <button class="btn" id="gBack" type="button">&larr; Back</button>
+          <span class="g-count" id="gCount">1 / 6</span>
+          <button class="btn primary" id="gNext" type="button">Next &rarr;</button>
+        </div>
       </div>
     </div>
   </aside>
@@ -502,4 +568,209 @@ loadPrefs();
 CheckardsEngine().then(m=>{M=m;newGame();
   try{if(!localStorage.getItem('checardsHelpSeen')){showTab('help');localStorage.setItem('checardsHelpSeen','1')}}catch(e){}
   const q=new URLSearchParams(location.search);if(q.get('autotest')){aiBusy=true;autotest(+q.get('autotest'))}});
+</script>
+<script>
+/* Interactive help guide: step-through sections with animated demos.
+   Owns #pane-help only. Reuses the page's faceHtml/backHtml card helpers. */
+(function(){
+const G=document.getElementById('helpGuide');if(!G)return;
+const RM=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
+const EYE='\ud83d\udc41\ufe0f';
+function card(name,owner,rev){return faceHtml(name,'sm',owner==null?0:owner,!!rev)}
+function backCard(owner,cls){return backHtml(owner,cls||'sm')}
+function mini(cols,rows){
+  const m=document.createElement('div');m.className='mini';
+  m.style.gridTemplateColumns='repeat('+cols+', var(--msq))';
+  for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
+    const s=document.createElement('div');s.className='msq '+(((x+y)%2==0)?'l':'d');m.appendChild(s)}
+  return m}
+function sq(m,cols,x,y){return m.children[y*cols+x]}
+function flyer(m,html){const f=document.createElement('div');f.className='fly';f.innerHTML=html;m.appendChild(f);return f}
+function place(f,x,y){f.style.setProperty('--fx',x);f.style.setProperty('--fy',y)}
+function cap(host){const c=document.createElement('div');c.className='cap';host.appendChild(c);return c}
+
+/* Step 0 - Goal: an attacker hunts down both enemy Aces */
+const dGoal=(function(){
+  let m,att,a1,a2,win,capt;const COLS=6;
+  function build(host){
+    m=mini(COLS,1);
+    a1=flyer(m,card('AC',1));a2=flyer(m,card('AS',1));att=flyer(m,card('KH',0));
+    host.appendChild(m);
+    win=document.createElement('span');win.className='gwin gfade';win.textContent='Both enemy Aces down - Red wins!';
+    host.appendChild(win);
+    capt=cap(host);capt.textContent='Hunt down both enemy Aces.'}
+  function reset(){
+    [a1,a2,att].forEach(f=>{const c=f.firstChild;c.classList.remove('gdie');c.style.opacity=''});
+    sq(m,COLS,2,0).classList.remove('cb');sq(m,COLS,4,0).classList.remove('cb');
+    win.classList.add('gfade');win.classList.remove('gpop');
+    place(att,0,0);place(a1,2,0);place(a2,4,0)}
+  function step(t){t=t%7;
+    if(t==0)reset();
+    else if(t==1){place(att,2,0);sq(m,COLS,2,0).classList.add('cb')}
+    else if(t==2)a1.firstChild.classList.add('gdie');
+    else if(t==3){place(att,4,0);sq(m,COLS,4,0).classList.add('cb')}
+    else if(t==4){a2.firstChild.classList.add('gdie');win.classList.remove('gfade');win.classList.add('gpop')}}
+  function statik(){reset();place(att,4,0);
+    a1.firstChild.style.opacity=0;a2.firstChild.style.opacity=0;
+    sq(m,COLS,2,0).classList.add('cb');sq(m,COLS,4,0).classList.add('cb');
+    win.classList.remove('gfade')}
+  return{build:build,step:step,statik:statik}})();
+
+/* Step 1 - Your cards: the 13-card deck flips over one at a time */
+const dCards=(function(){
+  let slots,capt;const NAMES=['Jkr*','AD','AH','9D','10D','JD','QD','KD','9H','10H','JH','QH','KH'];
+  function build(host){
+    const row=document.createElement('div');row.className='g-row';row.style.gap='4px';row.style.alignItems='center';
+    slots=NAMES.map(()=>{const s=document.createElement('span');s.innerHTML=backCard(0,'xs');row.appendChild(s);return s});
+    host.appendChild(row);capt=cap(host)}
+  function reset(){slots.forEach(s=>{s.innerHTML=backCard(0,'xs')});capt.textContent='13 cards in your personal deck.'}
+  function step(t){t=t%16;
+    if(t==0)reset();
+    else if(t<=13){const i=t-1;slots[i].firstChild.classList.add('gflip');
+      setTimeout(()=>{slots[i].innerHTML=faceHtml(NAMES[i],'xs',0)},170);
+      if(t==13)capt.textContent='1 Joker, 2 Aces, and 9 through K of each of your two suits.'}}
+  function statik(){slots.forEach((s,i)=>{s.innerHTML=faceHtml(NAMES[i],'xs',0)});
+    capt.textContent='1 Joker, 2 Aces, and 9 through K of each of your two suits.'}
+  return{build:build,step:step,statik:statik}})();
+
+/* Step 2 - Setup: 7 cards placed one at a time in the home rows */
+const dSetup=(function(){
+  let m,capt;const COLS=7;
+  const PL=[['AD',3,2],['AH',5,1],['KH',1,2],['9D',4,2],['QH',0,1],['10D',6,2],['JH',2,0]];
+  function build(host){m=mini(COLS,3);host.appendChild(m);capt=cap(host)}
+  function reset(){for(const s of m.children)s.innerHTML='';capt.textContent='Your two Aces go down first.'}
+  function step(t){t=t%10;
+    if(t==0)reset();
+    else if(t<=7){const p=PL[t-1];const s=sq(m,COLS,p[1],p[2]);s.innerHTML=card(p[0],0);s.firstChild.classList.add('gpop');
+      capt.textContent=t<=2?'Card '+t+' of 7 - your Aces first.':'Card '+t+' of 7 - now your picks, in the order you choose.'}
+    else if(t==8)capt.textContent='The 6 cards you skip become your draw pile.'}
+  function statik(){reset();PL.forEach(p=>{sq(m,COLS,p[1],p[2]).innerHTML=card(p[0],0)});
+    capt.textContent='The 6 cards you skip become your draw pile.'}
+  return{build:build,step:step,statik:statik}})();
+
+/* Step 3 - A turn: one card glides through 3 moves; a draw spawns on the back row */
+const dTurn=(function(){
+  let mm,mcap,mfly,sm,scap;
+  const PATH=[[0,1],[1,1],[2,0],[3,0]];
+  function build(host){
+    mm=mini(5,2);mfly=flyer(mm,card('KH',0));
+    host.appendChild(mm);mcap=cap(host);
+    const d2=document.getElementById('gdSpawn');
+    sm=mini(7,1);d2.appendChild(sm);scap=cap(d2)}
+  function reset(){
+    place(mfly,PATH[0][0],PATH[0][1]);
+    mcap.textContent='One move: one of your cards to a neighbouring square. 3 moves left.';
+    const s4=sq(sm,7,4,0);s4.innerHTML='';s4.classList.add('sp');
+    scap.textContent='Or draw instead - the open squares of your back row glow.'}
+  function step(t){
+    const tm=t%6;
+    if(tm==0)place(mfly,PATH[0][0],PATH[0][1]);
+    else if(tm==1){place(mfly,1,1);mcap.textContent='2 moves left.'}
+    else if(tm==2){place(mfly,2,0);mcap.textContent='Diagonals count too. 1 move left.'}
+    else if(tm==3){place(mfly,3,0);mcap.textContent='0 moves left - your turn is over.'}
+    const ts=t%7;
+    if(ts==0){const s4=sq(sm,7,4,0);s4.innerHTML='';s4.classList.add('sp');
+      scap.textContent='Or draw instead - the open squares of your back row glow.'}
+    else if(ts==1){const s4=sq(sm,7,4,0);s4.innerHTML=backCard(0);s4.firstChild.classList.add('gpop')}
+    else if(ts==2){const s4=sq(sm,7,4,0);s4.firstChild.classList.add('gflip');
+      setTimeout(()=>{s4.innerHTML=card('QH',0)},170);
+      scap.textContent='The top card of your draw pile joins your army.'}
+    else if(ts==3){sq(sm,7,4,0).classList.remove('sp');scap.textContent='Drawing uses your whole turn.'}}
+  function statik(){
+    place(mfly,3,0);mcap.textContent='0 moves left - your turn is over.';
+    const s4=sq(sm,7,4,0);s4.innerHTML=card('QH',0);s4.classList.remove('sp');
+    scap.textContent='Drawing uses your whole turn.'}
+  return{build:build,step:function(t){if(t==0)reset();else step(t)},statik:statik}})();
+
+/* Step 4 - Combat: three battles cycle, each showing the rule that decides it */
+const dCombat=(function(){
+  let m,capt,attFly,defSq;const COLS=5;
+  const SC=[
+    {att:['KH'],def:['10C'],kill:'def',cap:'13 vs 10 - the higher total wins; the losing stack is destroyed.'},
+    {att:['KH'],def:['Jkr*'],kill:'att',cap:'A defending Joker beats any attack without an Ace.'},
+    {att:['AD'],def:['KS','9S'],kill:'def',cap:'An attacking Ace beats anything but a defending Joker.'}];
+  function build(host){m=mini(COLS,2);attFly=flyer(m,'');host.appendChild(m);capt=cap(host);defSq=sq(m,COLS,2,1)}
+  function setup(sc){
+    attFly.innerHTML=sc.att.map(n=>card(n,0)).join('');
+    defSq.innerHTML='<div class="mstack">'+sc.def.map(()=>backCard(1)).join('')+'</div>';
+    defSq.classList.remove('cb');
+    attFly.style.setProperty('--ox','0px');
+    place(attFly,0,1);capt.textContent=sc.cap}
+  function step(t){
+    const sc=SC[Math.floor(t/6)%SC.length],p=t%6;
+    if(p==0)setup(sc);
+    else if(p==1){place(attFly,2,1);attFly.style.setProperty('--ox','-8px');defSq.querySelector('.mstack').style.marginLeft='10px'}
+    else if(p==2){
+      defSq.querySelector('.mstack').innerHTML=sc.def.map(n=>faceHtml(n,'sm',1)).join('');
+      defSq.querySelectorAll('.pc').forEach(pc=>pc.classList.add('gflip'));
+      defSq.classList.add('cb')}
+    else if(p==3){
+      if(sc.kill=='def')defSq.querySelectorAll('.pc').forEach(pc=>pc.classList.add('gdie'));
+      else attFly.querySelectorAll('.pc').forEach(pc=>pc.classList.add('gdie'))}}
+  function statik(){const sc=SC[0];setup(sc);place(attFly,2,1);attFly.style.setProperty('--ox','-8px');defSq.querySelector('.mstack').style.marginLeft='10px';
+    defSq.querySelector('.mstack').innerHTML=sc.def.map(n=>faceHtml(n,'sm',1)).join('');
+    defSq.querySelectorAll('.pc').forEach(pc=>{pc.style.opacity=.35});
+    defSq.classList.add('cb')}
+  return{build:build,step:step,statik:statik}})();
+
+/* Step 5 - Hidden cards: a face-down enemy stack is revealed by battle; your seen card gets the eye */
+const dHidden=(function(){
+  let figA,figB,capt;
+  function build(host){
+    const row=document.createElement('div');row.className='g-row';
+    figA=document.createElement('div');figA.className='g-fig';
+    figB=document.createElement('div');figB.className='g-fig';
+    row.appendChild(figA);row.appendChild(figB);host.appendChild(row);
+    capt=cap(host)}
+  function render(aFaces,bEye){
+    figA.innerHTML='<div class="cc">'+(aFaces?faceHtml('9C','sm',1,true)+faceHtml('AS','sm',1,true):backCard(1)+backCard(1))+'</div><div class="lbl">enemy stack</div>';
+    figB.innerHTML='<div class="cc">'+faceHtml('KH','sm',0,bEye)+'</div><div class="lbl">your card</div>'}
+  function step(t){t=t%6;
+    if(t==0){render(false,false);capt.textContent='Enemy cards stay face down until they fight.'}
+    else if(t==1){figA.querySelectorAll('.pc').forEach(pc=>pc.classList.add('gflip'));
+      setTimeout(()=>{render(true,false)},170);
+      capt.textContent='Battle reveals every card that took part, on both sides.'}
+    else if(t==2){render(true,true);
+      capt.textContent='The '+EYE+' marks what has been seen - your own cards included.'}}
+  function statik(){render(true,true);
+    capt.textContent='The '+EYE+' marks what has been seen - your own cards included.'}
+  return{build:build,step:step,statik:statik}})();
+
+const demos=[dGoal,dCards,dSetup,dTurn,dCombat,dHidden];
+const hosts=['gdGoal','gdCards','gdSetup','gdMove','gdCombat','gdHidden'];
+const secs=[...G.querySelectorAll('.g-step')];
+const dotsOl=document.getElementById('gDots');
+const backBtn=document.getElementById('gBack'),nextBtn=document.getElementById('gNext'),countEl=document.getElementById('gCount');
+secs.forEach((s,i)=>{
+  const li=document.createElement('li');const b=document.createElement('button');
+  b.type='button';b.className='g-dot';
+  const n=document.createElement('span');n.className='gn';n.textContent=i+1;
+  b.appendChild(n);b.appendChild(document.createTextNode(s.dataset.name));
+  b.addEventListener('click',()=>show(i,true));
+  li.appendChild(b);dotsOl.appendChild(li)});
+const dots=[...dotsOl.querySelectorAll('.g-dot')];
+demos.forEach((d,i)=>d.build(document.getElementById(hosts[i])));
+let cur=0,timer=null;
+function stopDemo(){if(timer){clearInterval(timer);timer=null}}
+function startDemo(){stopDemo();const d=demos[cur];if(!d)return;
+  if(RM()){if(d.statik)d.statik();return}
+  d.step(0);let t=1;
+  timer=setInterval(()=>{if(!G.offsetParent)return;d.step(t++)},700)}
+function show(i,focus){
+  cur=Math.max(0,Math.min(secs.length-1,i));
+  secs.forEach((s,j)=>s.classList.toggle('active',j==cur));
+  dots.forEach((d,j)=>{if(j==cur)d.setAttribute('aria-current','step');else d.removeAttribute('aria-current')});
+  backBtn.disabled=cur==0;nextBtn.disabled=cur==secs.length-1;
+  countEl.textContent=(cur+1)+' / '+secs.length;
+  if(focus)secs[cur].querySelector('h3').focus({preventScroll:true});
+  startDemo()}
+backBtn.addEventListener('click',()=>show(cur-1,true));
+nextBtn.addEventListener('click',()=>show(cur+1,true));
+G.addEventListener('keydown',e=>{
+  if(e.key=='ArrowRight'||e.key=='ArrowLeft'){e.preventDefault();show(cur+(e.key=='ArrowRight'?1:-1),true)}
+  else if(e.key=='Home'){e.preventDefault();show(0,true)}
+  else if(e.key=='End'){e.preventDefault();show(secs.length-1,true)}});
+try{matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change',()=>startDemo())}catch(e){}
+show(0,false);
+})();
 </script></body></html>
