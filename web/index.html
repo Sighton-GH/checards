@@ -633,7 +633,7 @@ function sendOnline(msg){
 function attachOnline(net){
   if(!net||typeof net.on!=='function'||typeof net.send!=='function')throw Error('A connected room client is required');
   const seq=++onlineSeq;onlineGame=net;onlineView=null;onlinePresence=null;
-  onlinePending=false;onlineConnected=true;onlineError='';sel=null;pendingDest=null;
+  onlinePending=false;onlineConnected=!net.status||net.status==='connected';onlineError='';sel=null;pendingDest=null;
   lastMove=null;lastCombat=[];gameId=null;logSeen=0;
   $('log').innerHTML='<div class="muted" id="logEmpty">Waiting for server...</div>';
   $('dl').closest('.moves-foot').classList.add('hidden');
@@ -654,14 +654,13 @@ function attachOnline(net){
   });
   net.on('presence',p=>{if(!current())return;onlinePresence=p;if(onlineView)render()});
   net.on('error',e=>{if(!current())return;onlinePending=false;onlineError=typeof e==='string'?e:e?.msg||'The server rejected that action.';if(onlineView)render()});
-  net.on('disconnect',()=>{if(!current())return;onlineConnected=false;onlinePending=false;if(onlineView)render()});
-  net.on('reconnect',()=>{if(!current())return;onlineConnected=true;onlinePending=false;onlineError='';if(onlineView)render()});
+  net.on('connection',s=>{if(!current())return;onlineConnected=s==='connected';if(onlineConnected){onlinePending=false;onlineError=''}if(onlineView)render()});
   if(net.presence)onlinePresence=net.presence;
   if(net.view){onlineView={...net.view,human:net.view.you};render()}
 }
 function detachOnline(){
   ++onlineSeq;onlineGame=null;onlineView=null;onlinePresence=null;
-  onlinePending=false;onlineConnected=true;onlineError='';sel=null;pendingDest=null;
+  onlinePending=false;onlineConnected=!net.status||net.status==='connected';onlineError='';sel=null;pendingDest=null;
   $('dl').closest('.moves-foot').classList.remove('hidden');
   if(M)render();
 }

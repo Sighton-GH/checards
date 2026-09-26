@@ -9,7 +9,34 @@ em++ -std=c++17 -O3 -DNDEBUG -Iengine/include engine/src/board.cpp engine/src/co
   -sEXPORTED_FUNCTIONS=_cg_new,_cg_place,_cg_draft,_cg_human_act,_cg_ai_step,_cg_state,_cg_log -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,UTF8ToString \
   --embed-file web/models@/models
 python3 - <<'PY'
+import re
 h=open('web/index.html').read();e=open('web/dist/engine.js').read()
-open('web/dist/checards-play.html','w').write(h.replace('/*ENGINE*/',e,1))
+h=h.replace('/*ENGINE*/',e,1)
+# Inline the multiplayer assets so the single-file dist stays self-contained.
+css=open('web/lobby.css').read()
+h=h.replace('<link rel="stylesheet" href="./lobby.css">','<style>\n'+css+'\n</style>',1)
+net=open('web/net.js').read()
+net=net.replace('export async function','async function').replace('export function','function').replace('export class','class')
+net=re.sub(r'^export default facade;\s*$','',net,flags=re.M)
+assert 'export ' not in net, 'unstripped export remains in net.js'
+lobby=open('web/lobby.js').read()
+lobby=lobby.replace("import * as net from './net.js';",'')
+for fn in ['listRooms','createRoom','joinRoom','spectate']:
+    lobby=lobby.replace('net.'+fn+'(',fn+'(')
+lobby=lobby.replace('net[method](',"({'joinRoom':joinRoom,'spectate':spectate}[method])(")
+import re as _re
+assert not _re.search(r'[^./]net[.[]', lobby), 'unresolved net reference remains in lobby.js'
+h=h.replace('<script type="module" src="./lobby.js"></script>','<script type="module">\n'+net+'\n'+lobby+'\n</script>',1)
+assert './lobby.js' not in h and './lobby.css' not in h, 'external mp asset reference remains'
+open('web/dist/checards-play.html','w').write(h)
+PY
+# The hosted build also serves the multiplayer assets as separate files;
+# its index.html loads engine.js from the same folder instead of inlining it.
+cp web/lobby.js web/lobby.css web/net.js web/dist/
+python3 - <<'PY'
+h=open('web/index.html').read()
+h=h.replace('<script>/*ENGINE*/</script>','<script src="./engine.js"></script>',1)
+assert '/*ENGINE*/' not in h
+open('web/dist/index.html','w').write(h)
 PY
 ls -la web/dist/checards-play.html
