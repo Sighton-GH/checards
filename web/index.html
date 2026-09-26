@@ -164,14 +164,19 @@ select{width:100%;background:var(--surface);color:var(--text);border:1px solid v
 /* --- interactive help guide (owns #pane-help) --- */
 .guide{--msq:44px}
 @media(max-width:480px){.guide{--msq:37px}}
-.g-steps{display:flex;flex-wrap:wrap;gap:5px;list-style:none;margin:0 0 2px;padding:0}
-.g-dot{background:var(--surface);border:1px solid var(--line);color:var(--muted);border-radius:20px;padding:4px 10px;font-size:11.5px;font-weight:600;font-family:inherit;cursor:pointer}
-.g-dot:hover{color:var(--text)}
-.g-dot .gn{opacity:.7;margin-right:4px}
-.g-dot[aria-current="step"]{background:var(--accent);border-color:var(--accent-d);color:#fff}
-.g-dot:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.g-prog{height:7px;background:var(--line);border-radius:99px;margin:9px 0 2px;overflow:hidden}
-.g-fill{height:100%;width:16.67%;background:linear-gradient(90deg,var(--accent),var(--accent-d));border-radius:99px;transition:width .35s ease}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.g-track{display:flex;gap:5px;list-style:none;margin:0 0 6px;padding:0}
+.g-track>li{flex:1 1 0;min-width:0}
+.g-seg{position:relative;display:block;width:100%;overflow:hidden;background:var(--line);border:1px solid var(--line);color:var(--muted);border-radius:8px;padding:5px 8px;font-size:11.5px;font-weight:600;font-family:inherit;cursor:pointer;text-align:center;white-space:nowrap;text-overflow:ellipsis;transition:color .3s ease,border-color .3s ease,box-shadow .3s ease}
+.g-seg .g-fill{position:absolute;inset:0;width:0;background:linear-gradient(90deg,var(--accent),var(--accent-d));transition:width .4s ease}
+.g-seg .g-lab{position:relative;z-index:1}
+.g-seg .gn{opacity:.75;margin-right:3px}
+.g-seg.done .g-fill,.g-seg.cur .g-fill{width:100%}
+.g-seg.done,.g-seg.cur{border-color:var(--accent-d);color:#fff}
+.g-seg.cur{box-shadow:0 0 0 2px var(--panel),0 0 0 4px var(--accent)}
+.g-seg:hover:not(.done):not(.cur){color:var(--text);border-color:var(--accent)}
+.g-seg:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (max-width:520px){.g-track{flex-wrap:wrap}.g-track>li{flex:1 1 30%}}
 .g-step{display:none}
 .g-step.active{display:block}
 .g-step h3{margin:6px 0 2px;font-size:14.5px}
@@ -273,8 +278,8 @@ select{width:100%;background:var(--surface);color:var(--text);border:1px solid v
     <div class="dlg-head"><h2 id="helpTitle">How to play</h2><button class="btn ghost dlg-x" id="helpClose" type="button" aria-label="Close help">&times;</button></div>
     <div class="dlg-body">
       <div class="guide" id="helpGuide">
-        <ol class="g-steps" id="gDots" aria-label="Guide sections"></ol>
-        <div class="g-prog" id="gProg" role="progressbar" aria-valuemin="1" aria-valuemax="6" aria-valuenow="1" aria-label="Guide progress"><div class="g-fill" id="gFill"></div></div>
+        <ol class="g-track" id="gDots" aria-label="Guide sections"></ol>
+        <div class="sr-only" id="gProg" role="progressbar" aria-valuemin="1" aria-valuemax="6" aria-valuenow="1" aria-label="Guide progress">1 of 6</div>
         <div class="g-body" id="gBody">
           <section class="g-step" data-name="Goal">
             <h3 tabindex="-1">Goal</h3>
@@ -282,7 +287,7 @@ select{width:100%;background:var(--surface);color:var(--text);border:1px solid v
             <p>Destroy both enemy Aces to win the game. If the enemy destroys both of yours, you lose.</p>
             <p>If a long stretch of turns passes with no combat anywhere, the game ends in a draw.</p>
           </section>
-          <section class="g-step" data-name="Your cards">
+          <section class="g-step" data-name="Your cards" data-short="Cards">
             <h3 tabindex="-1">Your cards</h3>
             <div class="gdemo" id="gdCards"></div>
             <p>Each side commands a personal deck of 13 cards: 1 Joker, 2 Aces, and the 9, 10, J, Q and K of its two suits. Ranks 2 to 8 do not exist in Checards.</p>
@@ -294,7 +299,7 @@ select{width:100%;background:var(--surface);color:var(--text);border:1px solid v
             <p>Place 7 cards, one at a time, on empty squares in your three home rows. Your two Aces must go down first; after that you pick which of your remaining cards to place next.</p>
             <p>The 6 cards you do not place become your draw pile.</p>
           </section>
-          <section class="g-step" data-name="A turn">
+          <section class="g-step" data-name="A turn" data-short="Turn">
             <h3 tabindex="-1">A turn</h3>
             <div class="gdemo" id="gdMove"></div>
             <div class="gdemo" id="gdSpawn"></div>
@@ -317,7 +322,7 @@ select{width:100%;background:var(--surface);color:var(--text);border:1px solid v
               <li>Otherwise the higher total wins. Aces and Jokers count 1, cards 9 to K count their face value (K = 13). An exact tie destroys both stacks.</li>
             </ul>
           </section>
-          <section class="g-step" data-name="Hidden cards">
+          <section class="g-step" data-name="Hidden cards" data-short="Hidden">
             <h3 tabindex="-1">Hidden cards</h3>
             <div class="gdemo" id="gdHidden"></div>
             <p>Enemy cards stay face down until they fight in a battle. Combat reveals every card involved, on both sides, even a stack that is destroyed.</p>
@@ -786,15 +791,19 @@ const hosts=['gdGoal','gdCards','gdSetup','gdMove','gdCombat','gdHidden'];
 const secs=[...G.querySelectorAll('.g-step')];
 const dotsOl=document.getElementById('gDots');
 const backBtn=document.getElementById('gBack'),nextBtn=document.getElementById('gNext'),countEl=document.getElementById('gCount');
-const progEl=document.getElementById('gProg'),fillEl=document.getElementById('gFill');
+const progEl=document.getElementById('gProg');
 secs.forEach((s,i)=>{
   const li=document.createElement('li');const b=document.createElement('button');
-  b.type='button';b.className='g-dot';
+  b.type='button';b.className='g-seg';
+  const f=document.createElement('span');f.className='g-fill';f.setAttribute('aria-hidden','true');
+  const lab=document.createElement('span');lab.className='g-lab';
   const n=document.createElement('span');n.className='gn';n.textContent=i+1;
-  b.appendChild(n);b.appendChild(document.createTextNode(s.dataset.name));
+  lab.appendChild(n);lab.appendChild(document.createTextNode(s.dataset.short||s.dataset.name));
+  b.setAttribute('aria-label',s.dataset.name);
+  b.appendChild(f);b.appendChild(lab);
   b.addEventListener('click',()=>show(i,true));
   li.appendChild(b);dotsOl.appendChild(li)});
-const dots=[...dotsOl.querySelectorAll('.g-dot')];
+const dots=[...dotsOl.querySelectorAll('.g-seg')];
 demos.forEach((d,i)=>d.build(document.getElementById(hosts[i])));
 let cur=0,timer=null;
 function stopDemo(){if(timer){clearInterval(timer);timer=null}}
@@ -805,11 +814,12 @@ function startDemo(){stopDemo();const d=demos[cur];if(!d)return;
 function show(i,focus){
   cur=Math.max(0,Math.min(secs.length-1,i));
   secs.forEach((s,j)=>s.classList.toggle('active',j==cur));
-  dots.forEach((d,j)=>{if(j==cur)d.setAttribute('aria-current','step');else d.removeAttribute('aria-current')});
+  dots.forEach((d,j)=>{d.classList.toggle('done',j<cur);d.classList.toggle('cur',j==cur);
+    if(j==cur)d.setAttribute('aria-current','step');else d.removeAttribute('aria-current')});
   backBtn.disabled=cur==0;nextBtn.disabled=cur==secs.length-1;
   countEl.textContent=(cur+1)+' / '+secs.length;
   progEl.setAttribute('aria-valuenow',cur+1);
-  fillEl.style.width=((cur+1)/secs.length*100)+'%';
+  progEl.textContent=(cur+1)+' of '+secs.length;
   if(focus)secs[cur].querySelector('h3').focus({preventScroll:true});
   startDemo()}
 backBtn.addEventListener('click',()=>show(cur-1,true));
