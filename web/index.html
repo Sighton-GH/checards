@@ -48,7 +48,7 @@ function playMusic(key){
 function updateMusic(){
  if(!musicOn){playMusic(null);return}
  let key=musicPhase==='play'?'game':'menu';
- if(musicPhase==='over')key=musicResult===1+S.human?'win':'lose';
+ if(musicPhase==='over')key=musicResult===1+S.human?'win':(musicResult===1+(1-S.human)?'lose':null);
  playMusic(key);
 }
 function setMusicState(phase,result){

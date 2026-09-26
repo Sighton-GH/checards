@@ -29,10 +29,10 @@ embeds `web/models`, and regenerates the single-file `web/dist/checards-play.htm
 
 ## Music
 
-Four original instrumental cues live under `web/audio/` in Ogg Vorbis and MP3:
+Four original game-show-style instrumental cues live under `web/audio/` in Ogg Vorbis and MP3:
 `checards-menu` for setup, `checards-game` for play, and short `checards-win` /
 `checards-lose` endings. The Music button starts muted (browser autoplay rules),
-and turning it off stops every cue. The build embeds both audio formats in the
+and turning it off stops every cue. A draw or aborted game stays silent. The build embeds both audio formats in the
 single-file play page, so it still works when opened directly from `file://`.
 When serving `web/index.html` instead, keep `web/audio/` beside it. The source
 page resolves audio relative to `web/`.
