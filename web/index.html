@@ -1,84 +1,997 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>Checards - play the engine</title>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#eaf1f9">
+<link rel="icon" href="data:,">
+<title>Checards</title>
 <style>
-body{flex-wrap:wrap;font-family:system-ui,sans-serif;background:#1d2126;color:#e8e8e8;margin:0;display:flex;gap:20px;padding:16px}
-#left{flex:0 0 auto}#right{flex:1;min-width:280px;max-width:420px}
-table{border-collapse:collapse}td{width:78px;height:78px;border:1px solid #444;vertical-align:top;padding:2px;background:#2b3036;cursor:pointer;position:relative}
-td.home{background:#2f3a33}td.sel{outline:3px solid #f5c542;outline-offset:-3px}td.dest{background:#3d4f6b}td.combat{box-shadow:inset 0 0 0 3px #d9534f}
-.coord{position:absolute;right:3px;bottom:1px;font-size:10px;color:#777}
-.card{display:inline-block;font-size:13px;font-weight:600;padding:1px 4px;margin:1px;border-radius:3px}
-.r{background:#b33a3a;color:#fff}.b{background:#111;color:#ddd;border:1px solid #666}.hid{opacity:.85;font-style:italic}.rev{outline:2px solid #f5c542;outline-offset:0}.rev::after{content:'\1F441';font-size:10px;margin-left:2px}#deadp{font-size:13px;background:#15181b;padding:6px;border-radius:4px;margin-bottom:8px}#deadp .card{font-size:12px}
-button{background:#3a4450;color:#eee;border:1px solid #556;border-radius:4px;padding:5px 9px;margin:2px;cursor:pointer}button:hover{background:#4a5666}
-select{background:#2b3036;color:#eee;border:1px solid #556;padding:3px}
-#status{font-size:16px;margin:8px 0;min-height:22px}#log{font-size:12px;max-height:340px;overflow:auto;background:#15181b;padding:6px;border-radius:4px;white-space:pre-wrap}
-.row{margin:6px 0}.muted{color:#999;font-size:12px}
-</style></head><body>
-<div id="left"><div class="row" style="max-width:600px">
-Opponent <select id="model"><option value="patient:/models/champion-it32.bin">Champion (it32: patient strategy + deep-target net)</option><option value="patient:/models/champion-it31.bin">it31 (patient strategy + hybrid-trained net)</option><option value="patient:/models/champion-it29.bin">it30 (patient strategy + it29 net)</option><option value="/models/champion-it29.bin">it29 (search only)</option><option value="/models/champion-it28.bin">it28 (~4940 games)</option><option value="/models/cq-3000.bin">3000-game checkpoint</option><option value="/models/your-net.bin">Your net (checards_model.bin)</option><option value="/models/old-champion.bin">Old champion (cycle 4)</option></select>
-Strength <select id="iters"><option value="250" selected>Champion default (250 sims/move)</option><option value="60">Gate strength (60 sims/move)</option><option value="400">Strong (400)</option><option value="2000">Very strong (2000)</option></select>
-You play <select id="side"><option value="1">Red (moves first)</option><option value="0">Black</option></select>
-<button id="newg">New game</button></div>
-<div id="status">Loading engine...</div>
-<table id="board"></table>
-<div class="row" id="actions"></div>
-<div class="muted">Your home rows are at the bottom. Hidden enemy cards show as ?. Yellow outline + eye = revealed in combat (the other side has seen it; applies to your cards too).</div>
+*{box-sizing:border-box}
+:root{
+  --sq:80px;
+  /* Shared theme tokens: card components can use the same frame and surface. */
+  --bg:#eaf1f9; --panel:#ffffff; --line:#c6d7e9;
+  --text:#173451; --muted:#526982;
+  --accent:#205a9c; --accent-d:#17477d;
+  --surface:#f3f7fc; --surface-hover:#e4eef9;
+  --card-frame:#a7bdd5; --card-surface:#ffffff;
+  --sq-l:#e6f1ff; --sq-d:#426c9c;
+  --hl:rgba(255,205,76,.52); --sel:rgba(255,186,49,.66);
+  --dot:rgba(10,46,85,.52);
+  --danger:#b3343f; --gold:#9c620c;
+  --red:#b8323c; --navy:#244b78;
+}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:10px 18px;background:var(--panel);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;font-size:19px;font-weight:700;letter-spacing:.4px}
+.logo{display:inline-block;margin-right:9px;border-radius:6px;flex:0 0 auto}
+.top-actions{display:flex;gap:8px}
+
+.layout{display:flex;gap:22px;max-width:1080px;margin:0 auto;padding:18px 16px 40px;align-items:flex-start}
+.board-col{flex:0 1 660px;min-width:0}
+.side{flex:1 1 320px;min-width:300px;max-width:400px;position:sticky;top:16px}
+@media(max-width:920px){
+  .layout{flex-direction:column;padding:12px 10px 32px;gap:14px}
+  .board-col{flex:none;width:100%}
+  .side{position:static;max-width:none;width:100%}
+}
+
+.pbar{display:flex;align-items:center;gap:10px;padding:7px 6px;min-height:50px}
+.avatar{width:34px;height:34px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:17px;color:#fff;flex:0 0 auto}
+.avatar.fr{background:var(--red)} .avatar.fb{background:var(--navy)}
+.who{min-width:0}
+.who .nm{font-weight:650;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.who .sub{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pbar .sp{flex:1}
+.dead{display:flex;align-items:center;flex-wrap:wrap;gap:2px;justify-content:flex-end;max-width:52%}
+.pile{display:flex;align-items:center;gap:5px;color:var(--muted);font-size:12px;font-weight:650;flex:0 0 auto}
+
+.board-wrap{position:relative;width:100%;max-width:660px;margin:0 auto}
+@media(min-width:921px) and (min-height:541px){.board-wrap{max-width:min(660px,calc(100dvh - 300px))}}
+.board{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));grid-template-rows:repeat(7,minmax(0,1fr));width:100%;aspect-ratio:1;border-radius:8px;overflow:hidden;box-shadow:0 4px 18px rgba(21,57,92,.18)}
+.sq{position:relative;display:flex;align-items:center;justify-content:center;min-width:0;min-height:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.sq.l{background:var(--sq-l)} .sq.d{background:var(--sq-d)}
+.sq::before{content:'';position:absolute;inset:0;background:var(--tint,transparent);pointer-events:none}
+.sq.hr{--tint:rgba(184,50,60,.11)}
+.sq.hb{--tint:rgba(32,90,156,.16)}
+.sq.last{--tint:var(--hl)}
+.sq.sel{--tint:var(--sel)}
+.sq.combat{box-shadow:inset 0 0 0 3px var(--danger)}
+.sq.dest::after{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:24%;height:24%;border-radius:50%;background:var(--dot);pointer-events:none}
+.sq.dest.occ::after{width:78%;height:78%;background:transparent;border:calc(var(--sq)*.045 + 1px) solid var(--dot);border-radius:9%}
+.sq.spawn::after{content:'';position:absolute;inset:15%;border:2px dashed var(--accent);border-radius:10%;animation:pulse 1.6s ease-in-out infinite;pointer-events:none}
+@keyframes pulse{50%{opacity:.3}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+@media(pointer:coarse){.btn{min-height:44px;padding:10px 14px}.tab-btn{min-height:44px}}
+@media(max-width:380px){.topbar{flex-wrap:wrap;gap:8px}.brand{font-size:17px}}
+@media(max-width:920px){.scrim{position:fixed;border-radius:0;z-index:20}.side{min-width:0}}
+@media(orientation:landscape) and (max-height:540px){
+  .layout{flex-direction:row;align-items:flex-start}
+  .board-col{flex:0 1 auto}
+  .board-wrap{max-width:calc(100dvh - 175px)}
+  .side{position:static;flex:1 1 240px;min-width:230px;max-width:none}
+}
+.sq:focus-visible{outline:3px solid #fff;outline-offset:-3px;box-shadow:inset 0 0 0 5px var(--accent-d)}
+.cbtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.moves-foot .btn{font-size:12px}
+.sq .cr,.sq .cf{position:absolute;font-size:max(9px,calc(var(--sq)*.13));font-style:normal;font-weight:650;pointer-events:none;z-index:2}
+.sq .cr{top:2px;left:3px} .sq .cf{bottom:1px;right:3px}
+.sq.l .cr,.sq.l .cf{color:#294e77}
+.sq.d .cr,.sq.d .cf{color:#fff}
+
+/* Card faces modelled on standard English-pattern poker cards (2.5:3.5 ratio) */
+.pc{position:relative;display:inline-block;line-height:1;text-align:center;
+  font-size:calc(var(--sq)*.155);width:2.3em;height:3.22em;border-radius:.16em;
+  background:linear-gradient(165deg,#fefefd 0%,#fbf9f3 55%,#f1eddf 100%);
+  border:1px solid #a9a294;
+  box-shadow:inset 0 0 0 1px #fff,inset 0 0 0 2px rgba(120,110,90,.16),inset 0 -.5em .9em -.55em rgba(90,80,60,.14),0 1px 2px rgba(0,0,0,.42);
+  flex:0 0 auto;color:#26262e}
+.pc.rd{color:#c02830}
+.pc.jk-r{color:#c02830} .pc.jk-b{color:#33465e}
+.pc .ci{position:absolute;display:flex;flex-direction:column;align-items:center;width:.5em;line-height:.9;z-index:1}
+.pc .ci.tl{top:.13em;left:.07em}
+.pc .ci.br{bottom:.13em;right:.07em;transform:rotate(180deg)}
+.pc .ci .rk{font-size:.38em;font-weight:800;letter-spacing:-.02em}
+.pc .ci .rk.ten{font-size:.31em}
+.pc .ci .su{display:block;width:.3em;height:.3em;margin-top:.04em}
+.pc .ci .su svg{display:block;width:100%;height:100%;fill:currentColor}
+.pc .art{position:absolute;inset:0;width:100%;height:100%;fill:currentColor}
+.pc>.rk{display:block;font-size:.95em;font-weight:800;padding-top:.5em}
+.pc>.su{display:block;font-size:.8em;margin-top:.1em}
+.pc.jk .lbl{font-size:.34em;letter-spacing:.06em;font-weight:800}
+.pc.back{background:#f8f6ef;border-color:#8f887a;overflow:hidden}
+.pc.back::before{content:'';position:absolute;inset:.16em;border-radius:.08em;
+  background-image:
+    radial-gradient(circle at 50% 50%,transparent .26em,rgba(255,255,255,.55) .27em .29em,transparent .30em),
+    repeating-linear-gradient(45deg,rgba(255,255,255,.8) 0 .05em,transparent .05em .27em),
+    repeating-linear-gradient(-45deg,rgba(255,255,255,.8) 0 .05em,transparent .05em .27em),
+    repeating-linear-gradient(45deg,transparent 0 .13em,rgba(0,0,0,.15) .13em .18em,transparent .18em .27em),
+    repeating-linear-gradient(-45deg,transparent 0 .13em,rgba(0,0,0,.15) .13em .18em,transparent .18em .27em);
+  background-color:var(--backc,#b23a31);
+  box-shadow:0 0 0 .05em var(--backc,#b23a31),inset 0 0 .35em rgba(0,0,0,.16)}
+.pc.back.bb::before{--backc:#33517a}
+.pc.sm{font-size:12px}
+.pc.xs{font-size:9.5px}
+.pc.big{font-size:19px}
+@media(max-width:920px){.pc{font-size:calc(var(--sq)*.205)}}
+.eye{position:absolute;top:-.55em;right:-.55em;font-size:.6em;background:#f5c542;border-radius:50%;width:1.6em;height:1.6em;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 2px rgba(0,0,0,.4);z-index:2}
+
+.stack{display:flex;align-items:center;justify-content:center;max-width:96%}
+.stack .pc+.pc{margin-left:-1.55em}
+.n{position:absolute;top:1px;right:2px;z-index:3;min-width:1.35em;text-align:center;background:rgba(20,20,20,.78);color:#fff;font-size:max(9px,calc(var(--sq)*.13));font-weight:700;border-radius:1em;padding:.05em .3em;line-height:1.35}
+
+.status{display:flex;align-items:center;gap:9px;margin-top:12px;padding:10px 14px;background:var(--panel);border:1px solid var(--line);border-radius:9px;font-size:14px;min-height:44px}
+.status.over{border-color:var(--gold);background:#fff4dd}
+.tdot{width:9px;height:9px;border-radius:50%;background:var(--accent);flex:0 0 auto;box-shadow:0 0 6px var(--accent)}
+.spin{width:13px;height:13px;border:2px solid rgba(32,90,156,.2);border-top-color:var(--accent);border-radius:50%;animation:rot .8s linear infinite;flex:0 0 auto}
+@keyframes rot{to{transform:rotate(360deg)}}
+.status .pc{flex:0 0 auto}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;min-height:4px}
+
+.btn{background:var(--surface);border:1px solid var(--line);color:var(--text);border-radius:7px;padding:8px 13px;font-size:13px;font-family:inherit;cursor:pointer}
+.btn:hover{background:var(--surface-hover)}
+.btn.primary{background:var(--accent);border-color:var(--accent-d);color:#fff;font-weight:700}
+.btn.primary:hover{background:var(--accent-d)}
+.btn.ghost{background:transparent}
+.btn.big{padding:11px 16px;font-size:14px;width:100%}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.tabs{display:flex;background:var(--panel);border:1px solid var(--line);border-bottom:none;border-radius:10px 10px 0 0}
+.tab-btn{flex:1;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);padding:11px 6px;font-size:13.5px;font-weight:600;font-family:inherit;cursor:pointer}
+.tab-btn.active{color:var(--text);border-bottom-color:var(--accent)}
+.tab-pane{display:none;background:var(--panel);border:1px solid var(--line);border-top:none;border-radius:0 0 10px 10px;padding:12px}
+.tab-pane.active{display:block}
+
+.moves{max-height:430px;overflow-y:auto;font-size:13px;display:flex;flex-direction:column;gap:3px;padding-right:4px}
+.mv .pc{vertical-align:-.4em;margin:0 .12em}
+.mv b.you{color:var(--accent);font-weight:650}
+.mv b.ai{color:var(--text);font-weight:650}
+.mv.cb{padding-left:14px;color:var(--muted);font-size:12.5px}
+.mv.end{margin-top:6px;padding:7px 9px;background:#fff4dd;border:1px solid var(--gold);border-radius:7px;font-weight:600}
+.moves-foot{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.muted{color:var(--muted);font-size:12px}
+.scout{margin-top:10px}
+.scout summary{cursor:pointer;color:var(--muted);font-size:12.5px}
+.scout .list{margin-top:7px;display:flex;flex-wrap:wrap;gap:3px}
+
+.frow{margin-bottom:12px}
+.frow label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600}
+select{width:100%;background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:7px;padding:9px 10px;font-size:13.5px;font-family:inherit}
+
+.chooser{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);z-index:5;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;box-shadow:0 6px 20px rgba(0,0,0,.5);display:flex;flex-direction:column;gap:8px;align-items:center;max-width:94%}
+.chooser .t{font-size:12px;color:var(--muted);font-weight:600}
+.chooser .cs{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center}
+.cbtn{background:transparent;border:1px solid transparent;border-radius:8px;padding:5px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;font-family:inherit}
+.cbtn:hover{background:var(--surface-hover);border-color:var(--accent)}
+.cbtn .nm{font-size:10.5px;color:var(--muted)}
+.hidden{display:none!important}
+
+.scrim{position:absolute;inset:0;z-index:6;background:rgba(18,42,71,.65);display:flex;align-items:center;justify-content:center;border-radius:8px}
+.sheet{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;max-width:94%;box-shadow:0 10px 30px rgba(0,0,0,.55)}
+.sheet h3{margin:0 0 3px;font-size:15px}
+.sheet .sub{font-size:12px;color:var(--muted);margin-bottom:12px}
+.draft-cards{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;max-width:430px;max-height:52vh;overflow-y:auto}
+
+.dlg-scrim{position:fixed;inset:0;z-index:30;background:rgba(23,38,58,.55);display:flex;align-items:center;justify-content:center;padding:16px}
+.dlg{background:var(--panel);border:1px solid var(--line);border-radius:14px;max-width:560px;width:100%;max-height:calc(100dvh - 48px);display:flex;flex-direction:column;box-shadow:0 14px 44px rgba(10,30,55,.35)}
+.dlg-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px}
+.dlg-head h2{margin:0;font-size:17px}
+.dlg-x{font-size:18px;line-height:1;padding:6px 10px}
+.dlg-body{padding:0 16px 14px;overflow-y:auto}
+@media(max-width:560px){.dlg-scrim{padding:0;align-items:flex-end}.dlg{max-width:none;border-radius:14px 14px 0 0;max-height:92dvh}}
+/* --- interactive help guide (owns #pane-help) --- */
+.guide{--msq:44px}
+@media(max-width:480px){.guide{--msq:37px}}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.g-track{display:flex;gap:6px;list-style:none;margin:2px 0 14px;padding:0}
+.g-track>li{flex:1 1 0;min-width:0}
+.g-seg{position:relative;display:block;width:100%;overflow:hidden;background:var(--line);border:1px solid var(--line);color:var(--muted);border-radius:8px;padding:5px 8px;font-size:11.5px;font-weight:600;font-family:inherit;cursor:pointer;text-align:center;white-space:nowrap;text-overflow:ellipsis;transition:color .3s ease,border-color .3s ease,box-shadow .3s ease}
+.g-seg .g-fill{position:absolute;inset:0;width:0;background:linear-gradient(90deg,var(--accent),var(--accent-d));transition:width .4s ease}
+.g-seg .g-lab{position:relative;z-index:1}
+.g-seg .gn{opacity:.75;margin-right:3px}
+.g-seg.done .g-fill,.g-seg.cur .g-fill{width:100%}
+.g-seg.done,.g-seg.cur{border-color:var(--accent-d);color:#fff}
+.g-seg.cur{box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.75)}
+.g-seg:hover:not(.done):not(.cur){color:var(--text);border-color:var(--accent)}
+.g-seg:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (max-width:520px){.g-track{flex-wrap:wrap}.g-track>li{flex:1 1 30%}}
+.g-step{display:none}
+.g-step.active{display:block}
+.g-step h3{margin:2px 0 4px;font-size:14.5px}
+.g-step h3:focus{outline:none}
+.g-step h3:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.g-step p,.g-step li{font-size:13px;line-height:1.55;color:var(--text);margin:4px 0}
+.g-step ul{margin:4px 0;padding-left:18px}
+.gdemo{background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:12px 10px 6px;margin:8px 0 6px;overflow:hidden}
+.gdemo .cap{text-align:center;font-size:12px;color:var(--muted);margin:8px 0 2px;min-height:2.4em;line-height:1.35}
+.mini{position:relative;display:grid;width:max-content;margin:0 auto;border-radius:6px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.msq{width:var(--msq);height:var(--msq);position:relative;display:flex;align-items:center;justify-content:center}
+.msq.l{background:var(--sq-l)} .msq.d{background:var(--sq-d)}
+.msq.sp::after{content:'';position:absolute;inset:12%;border:2px dashed rgba(255,255,255,.85);border-radius:12%;pointer-events:none}
+.msq.cb{box-shadow:inset 0 0 0 3px var(--danger)}
+.msq.act{box-shadow:inset 0 0 0 3px var(--accent)}
+.msq.trail::before{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:24%;height:24%;border-radius:50%;background:var(--dot)}
+.mini{border:1px solid var(--card-frame)}
+.mstack{display:flex;align-items:center;justify-content:center;max-width:98%}
+.mstack .pc+.pc{margin-left:-.9em}
+.fly{position:absolute;left:0;top:0;width:var(--msq);height:var(--msq);display:flex;align-items:center;justify-content:center;z-index:3;pointer-events:none;transform:translate(calc(var(--fx,0)*var(--msq) + var(--ox,0px)),calc(var(--fy,0)*var(--msq) + var(--oy,0px)));transition:transform .55s ease}
+.gpop{animation:gpop .38s ease}
+@keyframes gpop{0%{transform:scale(.3);opacity:0}70%{transform:scale(1.08)}100%{transform:scale(1)}}
+.gflip{animation:gflip .36s ease}
+@keyframes gflip{50%{transform:scaleX(0)}}
+.gdie{animation:gdie .6s ease forwards}
+@keyframes gdie{25%{transform:translateX(-3px)}55%{transform:translateX(3px)}100%{transform:scale(.6);opacity:0}}
+.gwin{display:block;width:max-content;max-width:100%;margin:8px auto 0;background:rgba(156,98,12,.12);border:1px solid var(--gold);color:var(--gold);font-size:12.5px;font-weight:700;border-radius:8px;padding:5px 12px}
+.gfade{opacity:0;transition:opacity .3s}
+.g-row{display:flex;gap:18px;flex-wrap:wrap;justify-content:center;align-items:flex-start}
+.g-fig{text-align:center}
+.g-fig .lbl{font-size:11px;color:var(--muted);margin-top:5px}
+.g-fig .cc{display:flex;gap:3px;justify-content:center}
+.guide .legend{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:10px 0 2px}
+.guide .leg{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.g-nav{display:flex;align-items:center;gap:10px;margin-top:8px;padding-top:10px;border-top:1px solid var(--line)}
+.g-nav .g-count{flex:1;text-align:center;font-size:12px;color:var(--muted)}
+.g-nav .btn[disabled]{opacity:.45;cursor:default}
+</style></head>
+<body>
+<header class="topbar">
+  <div class="brand"><svg class="logo" width="26" height="26" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Checards ace square logo">
+  <rect x="2" y="2" width="60" height="60" rx="13" fill="#174E9A"/>
+  <path d="M2 15A13 13 0 0 1 15 2h17v30H2Z" fill="#2368B7"/>
+  <path d="M32 32h30v17a13 13 0 0 1-13 13H32Z" fill="#2368B7"/>
+  <rect x="13" y="7" width="38" height="50" rx="5" fill="#FFF"/>
+  <path d="M32 17C27 23 20 29 20 35a7 7 0 0 0 12 5 7 7 0 0 0 12-5c0-6-7-12-12-18Z" fill="#17243B"/>
+  <path d="M29 39h6l3 8H26Z" fill="#17243B"/>
+  <path d="m20 14 4 5-4 5-4-5Z" fill="#D8404D"/>
+  <path d="m44 40 4 5-4 5-4-5Z" fill="#D8404D"/>
+</svg>Checards</div>
+  <div class="top-actions">
+    <button class="btn ghost" id="helpBtn" type="button">How to play</button>
+    <button class="btn primary" id="newgTop" type="button">New game</button>
+  </div>
+</header>
+<main class="layout">
+  <section class="board-col">
+    <div class="pbar" id="barTop"></div>
+    <div class="board-wrap" id="boardWrap">
+      <div class="board" id="board"></div>
+      <div class="chooser hidden" id="chooser" role="dialog" aria-label="Choose which card moves"></div>
+      <div class="scrim hidden" id="draft" role="dialog" aria-modal="true" aria-label="Pick your next card"></div>
+    </div>
+    <div class="pbar" id="barBottom"></div>
+    <div class="status" id="status" aria-live="polite">Loading engine&hellip;</div>
+    <div class="actions" id="actions"></div>
+  </section>
+  <aside class="side" id="sidePanel">
+    <div class="tabs" role="tablist">
+      <button class="tab-btn active" data-tab="moves" type="button" role="tab" id="tab-moves" aria-selected="true" aria-controls="pane-moves">Moves</button>
+      <button class="tab-btn" data-tab="newgame" type="button" role="tab" id="tab-newgame" aria-selected="false" aria-controls="pane-newgame" tabindex="-1">New game</button>
+    </div>
+    <div class="tab-pane active" id="pane-moves" role="tabpanel" aria-labelledby="tab-moves">
+      <div class="moves" id="log" role="log" aria-label="Move list"><div class="muted" id="logEmpty">Moves will appear here once the game starts.</div></div>
+      <div class="scout" id="scout"></div>
+      <div class="moves-foot">
+        <button class="btn" id="dl" type="button">Download log (JSON)</button>
+        <button class="btn" id="dlall" type="button">Download all saved games</button>
+        <div class="muted" id="saved"></div>
+      </div>
+    </div>
+    <div class="tab-pane" id="pane-newgame" role="tabpanel" aria-labelledby="tab-newgame">
+      <form id="setupForm" onsubmit="return false">
+        <div class="frow"><label for="model">Opponent</label>
+          <select id="model"><optgroup label="Pick a difficulty"><option value="/models/cq-3000.bin">Easy</option><option value="/models/champion-it28.bin">Normal</option><option value="patient:/models/champion-it32.bin" selected>Hard - reigning champion</option></optgroup><optgroup label="All opponents (advanced)"><option value="patient:/models/champion-it32.bin">Champion (it32: patient strategy + deep-target net)</option><option value="patient:/models/champion-it31.bin">it31 (patient strategy + hybrid-trained net)</option><option value="patient:/models/champion-it29.bin">it29 (patient strategy)</option><option value="/models/champion-it29.bin">it29 (search only)</option><option value="/models/champion-it28.bin">it28 (~4940 games)</option><option value="/models/cq-3000.bin">3000-game checkpoint</option><option value="/models/your-net.bin">Your net (checards_model.bin)</option><option value="/models/old-champion.bin">Old champion (cycle 4)</option></select></div>
+        <div class="frow"><label for="iters">Strength</label>
+          <select id="iters"><option value="250" selected>Champion default (250 sims/move)</option><option value="60">Gate strength (60 sims/move)</option><option value="400">Strong (400)</option><option value="2000">Very strong (2000)</option></select></div>
+        <div class="frow"><label for="side">You play</label>
+          <select id="side"><option value="1">Red (moves first)</option><option value="0">Black</option></select></div>
+        <button class="btn primary big" id="newg" type="button">Start game</button>
+        <p class="muted">Starts a fresh game. Finished games stay saved in this browser.</p>
+      </form>
+    </div>
+    
+  </aside>
+</main>
+<div class="dlg-scrim hidden" id="helpScrim">
+  <div class="dlg" role="dialog" aria-modal="true" aria-labelledby="helpTitle" id="pane-help">
+    <div class="dlg-head"><h2 id="helpTitle">How to play</h2><button class="btn ghost dlg-x" id="helpClose" type="button" aria-label="Close help">&times;</button></div>
+    <div class="dlg-body">
+      <div class="guide" id="helpGuide">
+        <ol class="g-track" id="gDots" aria-label="Guide sections"></ol>
+        <div class="sr-only" id="gProg" role="progressbar" aria-valuemin="1" aria-valuemax="6" aria-valuenow="1" aria-label="Guide progress">1 of 6</div>
+        <div class="g-body" id="gBody">
+          <section class="g-step" data-name="Goal">
+            <h3 tabindex="-1">Goal</h3>
+            <div class="gdemo" id="gdGoal"></div>
+            <p>Destroy both enemy Aces to win the game. If the enemy destroys both of yours, you lose.</p>
+            <p>If a long stretch of turns passes with no combat anywhere, the game ends in a draw.</p>
+          </section>
+          <section class="g-step" data-name="Your cards" data-short="Cards">
+            <h3 tabindex="-1">Your cards</h3>
+            <div class="gdemo" id="gdCards"></div>
+            <p>Each side commands a personal deck of 13 cards: 1 Joker, 2 Aces, and the 9, 10, J, Q and K of its two suits. Ranks 2 to 8 do not exist in Checards.</p>
+            <p>Red plays diamonds and hearts; Black plays clubs and spades. Red always sets up first and moves first.</p>
+          </section>
+          <section class="g-step" data-name="Setup">
+            <h3 tabindex="-1">Setup</h3>
+            <div class="gdemo" id="gdSetup"></div>
+            <p>Place 7 cards, one at a time, on empty squares in your three home rows. Your two Aces must go down first; after that you pick which of your remaining cards to place next.</p>
+            <p>The 6 cards you do not place become your draw pile.</p>
+          </section>
+          <section class="g-step" data-name="A turn" data-short="Turn">
+            <h3 tabindex="-1">A turn</h3>
+            <div class="gdemo" id="gdMove"></div>
+            <div class="gdemo" id="gdSpawn"></div>
+            <ul>
+              <li>You get 3 moves per turn. One move shifts one of your cards to a neighbouring square, in any direction.</li>
+              <li>Up to 4 of your cards can share a square.</li>
+              <li>Or draw instead: as the first action of your turn, place the top card of your draw pile on an empty square of your back row. Drawing uses your whole turn.</li>
+              <li>If you have no legal action at all, your turn passes.</li>
+            </ul>
+          </section>
+          <section class="g-step" data-name="Combat">
+            <h3 tabindex="-1">Combat</h3>
+            <div class="gdemo" id="gdCombat"></div>
+            <p>Move onto a square that holds enemy cards to attack. A card that attacks cannot move again that turn. Battles are resolved after the turn's moves are done, every card that takes part is revealed, and each stack wins or dies as a whole.</p>
+            <ul>
+              <li>Two attacking Aces overwhelm a defending Joker: the defender dies, the attackers live.</li>
+              <li>One attacking Ace trades with a defending Joker: both sides are destroyed.</li>
+              <li>Any other attack that includes an Ace wins automatically. No counter is possible.</li>
+              <li>A defending Joker beats any attack without an Ace.</li>
+              <li>Otherwise the higher total wins. Aces and Jokers count 1, cards 9 to K count their face value (K = 13). An exact tie destroys both stacks.</li>
+            </ul>
+          </section>
+          <section class="g-step" data-name="Hidden cards" data-short="Hidden">
+            <h3 tabindex="-1">Hidden cards</h3>
+            <div class="gdemo" id="gdHidden"></div>
+            <p>Enemy cards stay face down until they fight in a battle. Combat reveals every card involved, on both sides, even a stack that is destroyed.</p>
+            <p>Cards marked &#128065;&#65039; have been seen by the other side. Your own cards get the mark too once the enemy has seen them, so you know what to keep hidden.</p>
+            <div class="legend">
+              <span class="leg"><span class="pc rd sm"><span class="rk">Q</span><span class="su">&hearts;</span></span> face-up card</span>
+              <span class="leg"><span class="pc back bb sm"></span> hidden enemy</span>
+              <span class="leg"><span class="pc bk sm"><span class="rk">9</span><span class="su">&clubs;</span><span class="eye">&#128065;&#65039;</span></span> seen in battle</span>
+            </div>
+          </section>
+        </div>
+        <div class="g-nav">
+          <button class="btn" id="gBack" type="button">&larr; Back</button>
+          <span class="g-count" id="gCount">1 / 6</span>
+          <button class="btn primary" id="gNext" type="button">Next &rarr;</button>
+        </div>
+      </div></div>
+  </div>
 </div>
-<div id="right"><div id="deadp"></div><div class="row"><b>Game log</b> <button id="dl">Download game log (JSON)</button> <button id="dlall">Download all saved games</button></div>
-<div id="log"></div><div class="muted" id="saved"></div></div>
+
 <script>/*ENGINE*/</script>
 <script>
-let M, S, sel=null, gameId=null, aiBusy=false;
-const RES={1:'Red wins',2:'Black wins',3:'Draw (mutual)',4:'Draw (inactivity)',5:'Aborted (ply safety limit)'};
+let M,S,sel=null,gameId=null,aiBusy=false,pendingDest=null,lastMove=null,lastCombat=[],logSeen=0,focusSq=null;
+const reducedMotion=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
+const RES={1:'Red wins',2:'Black wins',3:'Draw - mutual destruction',4:'Draw - no combat for a long stretch',5:'Stopped - move limit reached'};
 const $=id=>document.getElementById(id);
 const st=()=>JSON.parse(M.UTF8ToString(M._cg_state()));
 const cell=(x,y)=>S.board[x*7+y];
-function cardHtml(c){if(c.name)c.name=c.name.replace('Jkr*','Joker');const cls=c.owner==0?'r':'b';if(!c.name)return `<span class="card ${cls} hid">?</span>`;return `<span class="card ${cls}${c.revealed?' rev':''}">${c.name}</span>`}
-const DECK=f=>{const su=f==0?['D','H']:['C','S'];const d=['Joker','A'+su[0],'A'+su[1]];for(const r of ['9','10','J','Q','K'])for(const x of su)d.push(r+x);return d};
-const nm=n=>n.replace('Jkr*','Joker');
-function renderDead(){const D=[[],[]];let L=[];try{L=JSON.parse(M.UTF8ToString(M._cg_log()))}catch(e){}
- for(const ev of L)for(const c of (ev.combat||[])){const a=c.attacker,d=1-a;if(c.attackerDied)c.att.forEach(n=>D[a].push(nm(n)));if(c.defenderDied)c.def.forEach(n=>D[d].push(nm(n)))}
- const h=S.human,ai=1-h,chip=(n,f)=>`<span class="card ${f==0?'r':'b'}">${n}</span>`;
- const seen=new Set(D[ai]);if(S.phase!='over')for(const t of S.board)for(const c of t)if(c.owner==ai&&c.name)seen.add(nm(c.name));
- const unseen=S.phase=='play'?DECK(ai).filter(n=>!seen.has(n)):[];
- $('deadp').innerHTML=`<b>Dead cards</b><div>You: ${D[h].map(n=>chip(n,h)).join('')||'<span class="muted">none</span>'}</div><div>AI: ${D[ai].map(n=>chip(n,ai)).join('')||'<span class="muted">none</span>'}</div>`+
-  (S.phase=='play'?`<div style="margin-top:4px">AI cards never revealed (hidden on the board or still in its draw pile): ${unseen.map(n=>chip(n,ai)).join('')}</div>`:'')}
-function logLine(t){$('log').textContent+=t+'\n';$('log').scrollTop=1e9}
+const GLYPH={D:'\u2666',H:'\u2665',C:'\u2663',S:'\u2660'};
+const safeName=n=>/^[A-Za-z0-9*]{1,5}$/.test(n)?n:'?';
+const prettyName=n=>{n=safeName(n);return n=='Jkr*'?'Joker':n};
+const SUIT={
+  D:{n:'diamonds',p:'<path d="M50 4 92 50 50 96 8 50Z"/>'},
+  H:{n:'hearts',p:'<path d="M50 91C27 67 6 51 6 30 6 14 18 4 31 4c8 0 15 4 19 12 4-8 11-12 19-12 13 0 25 10 25 26 0 21-20 37-44 61Z"/>'},
+  S:{n:'spades',p:'<path d="M50 3C34 20 8 39 8 59c0 14 10 24 22 24 7 0 13-3 17-9-1 10-4 18-9 22h24c-5-4-8-12-9-22 4 6 10 9 17 9 12 0 22-10 22-24C92 39 66 20 50 3Z"/>'},
+  C:{n:'clubs',p:'<circle cx="50" cy="24" r="19"/><circle cx="27" cy="57" r="19"/><circle cx="73" cy="57" r="19"/><path d="M50 52c1 15-1 29-9 42h18c-8-13-10-27-9-42Z"/>'}};
+const STAR='<path d="M50 6 61.5 37.5 94.5 38 68 58 77 90.5 50 71.5 23 90.5 32 58 5.5 38 38.5 37.5Z"/>';
+const CD={G:'#e3ae35',R:'#c12e2b',B:'#2f4e92',D:'#211f26',F:'#f2d2a4',E:'#f8f3e4',HK:'#8f8a80',HQ:'#4a3c31',HJ:'#d9a83e',LP:'#b03a30',SV:'#e4e7ec',GR:'#3f7a3a',BR:'#7a5230'};
+function pipAt(su,cx,cy,w,inv){return `<svg x="${cx-w/2}" y="${cy-w/2}" width="${w}" height="${w}" viewBox="0 0 100 100"${inv?` transform="rotate(180 ${cx} ${cy})"`:''}>${SUIT[su].p}</svg>`}
+function pipArt(rk,su){
+  if(rk=='A'){
+    if(su=='S')return pipAt(su,50,70,46,0)+
+      `<svg x="29.5" y="49.5" width="41" height="41" viewBox="0 0 100 100" fill="none" stroke="#f6f2e6" stroke-width="4.5">${SUIT.S.p}</svg>`+
+      `<path d="M50 62.5 57.5 71.5 50 80.5 42.5 71.5Z" fill="${CD.G}" stroke="${CD.D}" stroke-width="1"/>`;
+    return pipAt(su,50,70,44,0)}
+  let s='';
+  if(rk=='10'){const rows=[[18,0],[54,0],[86,1],[122,1]];
+    for(const cx of [25,75])for(const r of rows)s+=pipAt(su,cx,r[0],21,r[1]);
+    return s+pipAt(su,50,40,21,0)+pipAt(su,50,100,21,1)}
+  const rows=[[18,0],[52,0],[88,1],[122,1]];
+  for(const cx of [25,75])for(const r of rows)s+=pipAt(su,cx,r[0],21,r[1]);
+  s+=pipAt(su,50,70,21,0);
+  return s}
+function courtArt(rk,su){
+  const {G,R,B,D,F,E,HK,HQ,HJ,LP,SV,GR,BR}=CD;
+  const robe=rk=='K'?R:rk=='Q'?G:B;
+  const inner=rk=='K'?B:rk=='Q'?R:G;
+  const hairC=rk=='K'?HK:rk=='Q'?HQ:HJ;
+  const hat=rk=='K'
+    ?`<path d="M37.5 22 37.5 14 43 18.5 46.5 8.5 50 15.5 53.5 8.5 57 18.5 62.5 14 62.5 22Z" fill="${G}" stroke="${D}" stroke-width="1.3" stroke-linejoin="round"/>`+
+     `<circle cx="46.5" cy="7" r="1.6" fill="${R}" stroke="${D}" stroke-width=".7"/><circle cx="53.5" cy="7" r="1.6" fill="${B}" stroke="${D}" stroke-width=".7"/>`+
+     `<circle cx="41.5" cy="19.5" r="1" fill="${D}"/><circle cx="46.2" cy="19.5" r="1" fill="${D}"/><circle cx="53.8" cy="19.5" r="1" fill="${D}"/><circle cx="58.5" cy="19.5" r="1" fill="${D}"/>`
+    :rk=='Q'
+    ?`<path d="M39 22.5 39 16 44 19 50 10.5 56 19 61 16 61 22.5Z" fill="${G}" stroke="${D}" stroke-width="1.2" stroke-linejoin="round"/>`+
+     `<circle cx="50" cy="8.8" r="1.7" fill="${R}" stroke="${D}" stroke-width=".7"/><circle cx="41.8" cy="14.6" r="1.1" fill="${R}" stroke="${D}" stroke-width=".6"/><circle cx="58.2" cy="14.6" r="1.1" fill="${R}" stroke="${D}" stroke-width=".6"/>`
+    :`<path d="M38.5 22.5 38.5 9 61.5 9 61.5 22.5Z" fill="${R}" stroke="${D}" stroke-width="1.3" stroke-linejoin="round"/>`+
+     `<path d="M38.5 15.5h23" stroke="${G}" stroke-width="1.5"/>`+
+     `<path d="M43 9v13M50 9v13M57 9v13" stroke="${D}" stroke-width=".9"/>`+
+     `<circle cx="50" cy="6.6" r="1.9" fill="${G}" stroke="${D}" stroke-width=".8"/>`;
+  const hair=rk=='K'
+    ?`<path d="M38.5 22C35.8 29 35.2 39 37.6 50.5L43.5 50.5C41.2 41 41.4 30 44 23.5Z" fill="${hairC}" stroke="${D}" stroke-width="1"/>`+
+     `<path d="M61.5 22C64.2 29 64.8 39 62.4 50.5L56.5 50.5C58.8 41 58.6 30 56 23.5Z" fill="${hairC}" stroke="${D}" stroke-width="1"/>`+
+     `<path d="M39.3 27.5C38.2 33.5 38.3 41 40 46.5M60.7 27.5C61.8 33.5 61.7 41 60 46.5" stroke="${D}" stroke-width=".7" fill="none"/>`
+    :rk=='Q'
+    ?`<path d="M38.5 22C35.3 29 34.8 40.5 38 51.5 39.8 53.8 41.8 53 42.2 50.3 40.2 42 40.4 30.5 43.5 24Z" fill="${hairC}" stroke="${D}" stroke-width="1"/>`+
+     `<path d="M61.5 22C64.7 29 65.2 40.5 62 51.5 60.2 53.8 58.2 53 57.8 50.3 59.8 42 59.6 30.5 56.5 24Z" fill="${hairC}" stroke="${D}" stroke-width="1"/>`+
+     `<path d="M39.2 28.5C38 35 38.3 42.5 40.5 48.5M60.8 28.5C62 35 61.7 42.5 59.5 48.5" stroke="${G}" stroke-width=".7" fill="none"/>`
+    :`<path d="M39 22C37.2 28 37.2 36.5 39.6 41.5 41.4 43 43.2 41.8 43.4 39.8 41.6 34 41.8 28 44 23.5Z" fill="${hairC}" stroke="${D}" stroke-width="1"/>`+
+     `<path d="M61 22C62.8 28 62.8 36.5 60.4 41.5 58.6 43 56.8 41.8 56.6 39.8 58.4 34 58.2 28 56 23.5Z" fill="${hairC}" stroke="${D}" stroke-width="1"/>`;
+  const face=`<path d="M41.5 23 41.5 33Q41.5 44 50 44.5 58.5 44 58.5 33L58.5 23Z" fill="${F}" stroke="${D}" stroke-width="1.3"/>`+
+    `<path d="M43.6 29.2Q45.7 28 47.7 29" stroke="${D}" stroke-width=".9" fill="none"/>`+
+    `<path d="M52.3 29Q54.3 28 56.4 29.2" stroke="${D}" stroke-width=".9" fill="none"/>`+
+    `<path d="M44 31.7Q45.9 30.4 47.8 31.7 45.9 32.9 44 31.7Z" fill="#fff" stroke="${D}" stroke-width=".7"/>`+
+    `<path d="M52.2 31.7Q54.1 30.4 56 31.7 54.1 32.9 52.2 31.7Z" fill="#fff" stroke="${D}" stroke-width=".7"/>`+
+    `<circle cx="46.3" cy="31.7" r=".85" fill="${D}"/><circle cx="53.7" cy="31.7" r=".85" fill="${D}"/>`+
+    `<path d="M50 33 50 36.6 48.5 37.3" stroke="${D}" stroke-width=".9" fill="none" stroke-linecap="round"/>`;
+  const mouth=rk=='Q'
+    ?`<path d="M46.8 40Q50 42.6 53.2 40 50 41.6 46.8 40Z" fill="${LP}" stroke="${D}" stroke-width=".6"/>`
+    :rk=='J'
+    ?`<path d="M46.8 40.2Q50 41.8 53.2 40.2" stroke="${D}" stroke-width="1" fill="none" stroke-linecap="round"/>`
+    :'';
+  const beard=rk=='K'
+    ?`<path d="M43.4 37Q50 40.6 56.6 37 56.4 43.5 50 45.6 43.6 43.5 43.4 37Z" fill="${hairC}" stroke="${D}" stroke-width=".9"/>`+
+     `<path d="M47.2 41.6Q50 42.8 52.8 41.6" stroke="${D}" stroke-width=".8" fill="none" stroke-linecap="round"/>`
+    :'';
+  const robeBase=`<path d="M43.5 45C32 48.5 21.5 57 16.5 70L83.5 70C78.5 57 68 48.5 56.5 45 53 47 47 47 43.5 45Z" fill="${robe}" stroke="${D}" stroke-width="1.5" stroke-linejoin="round"/>`;
+  const collar=rk=='K'
+    ?`<path d="M41.5 46.5C36 48.5 30.5 52 26.5 56.5L30.5 60C34 55.5 39 52 44 50.3Z" fill="${E}" stroke="${D}" stroke-width=".9"/>`+
+     `<path d="M58.5 46.5C64 48.5 69.5 52 73.5 56.5L69.5 60C66 55.5 61 52 56 50.3Z" fill="${E}" stroke="${D}" stroke-width=".9"/>`+
+     `<path d="M30.5 56.8 31.8 58.4M34.5 54 35.8 55.6M66.5 56.8 65.2 58.4M63.5 54 62.2 55.6" stroke="${D}" stroke-width=".8"/>`
+    :`<path d="M42 46C37 48 32 51 28.5 55L32 58.5C35.5 54.5 40 51.3 44.6 49.6Z" fill="${G}" stroke="${D}" stroke-width=".9"/>`+
+     `<path d="M58 46C63 48 68 51 71.5 55L68 58.5C64.5 54.5 60 51.3 55.4 49.6Z" fill="${G}" stroke="${D}" stroke-width=".9"/>`;
+  const trim=`<path d="M21.5 62.5C26 55.5 31.5 50.5 37.5 47.8" stroke="${G}" stroke-width="1.1" fill="none"/>`+
+    `<path d="M78.5 62.5C74 55.5 68.5 50.5 62.5 47.8" stroke="${G}" stroke-width="1.1" fill="none"/>`;
+  const panel=`<path d="M45 49.5 55 49.5 57.5 70 42.5 70Z" fill="${inner}" stroke="${D}" stroke-width="1.1"/>`+
+    `<path d="M50 53 53 56.5 50 60 47 56.5Z" fill="${G}" stroke="${D}" stroke-width=".7"/>`+
+    `<path d="M50 60.8 52.6 63.8 50 66.8 47.4 63.8Z" fill="${rk=='Q'?G:R}" stroke="${D}" stroke-width=".7"/>`;
+  const hem=`<path d="M17.8 66 82.2 66 83.5 70 16.5 70Z" fill="${G}" stroke="${D}" stroke-width="1"/>`+
+    `<circle cx="26" cy="68" r="1" fill="${D}"/><circle cx="34" cy="68" r="1" fill="${D}"/><circle cx="42" cy="68" r="1" fill="${D}"/><circle cx="58" cy="68" r="1" fill="${D}"/><circle cx="66" cy="68" r="1" fill="${D}"/><circle cx="74" cy="68" r="1" fill="${D}"/>`;
+  const prop=rk=='K'
+    ?`<path d="M84.5 7 88 7 87.2 48 85.3 48Z" fill="${SV}" stroke="${D}" stroke-width="1"/>`+
+     `<path d="M86.2 10 86.2 46" stroke="${D}" stroke-width=".6"/>`+
+     `<path d="M80.5 49 92 49 92 52.2 80.5 52.2Z" fill="${G}" stroke="${D}" stroke-width=".9"/>`+
+     `<path d="M84.8 52.2 87.7 52.2 87.7 58 84.8 58Z" fill="${BR}" stroke="${D}" stroke-width=".9"/>`+
+     `<circle cx="86.2" cy="60" r="1.8" fill="${G}" stroke="${D}" stroke-width=".8"/>`+
+     `<path d="M81.5 55.5Q79.8 60 82.3 63 84 64.5 86.5 64.3 89.5 63.5 89.3 59.5 89.2 56 87 55Z" fill="${F}" stroke="${D}" stroke-width="1"/>`+
+     `<path d="M82.5 58.5 88.3 58.2M82.9 60.8 88 60.5" stroke="${D}" stroke-width=".7"/>`
+    :rk=='Q'
+    ?`<path d="M85 62C84.5 54 84.5 46 85.2 38" stroke="${GR}" stroke-width="1.4" fill="none"/>`+
+     `<path d="M85 50C82.5 48.5 81 46 81.2 43.5 83.5 44.5 85 46.5 85.3 49Z" fill="${GR}" stroke="${D}" stroke-width=".6"/>`+
+     `<circle cx="85.4" cy="33.5" r="2.4" fill="${G}" stroke="${D}" stroke-width=".7"/>`+
+     `<circle cx="82.4" cy="30.8" r="2.3" fill="${LP}" stroke="${D}" stroke-width=".7"/><circle cx="88.4" cy="30.8" r="2.3" fill="${LP}" stroke="${D}" stroke-width=".7"/><circle cx="85.4" cy="27.6" r="2.3" fill="${LP}" stroke="${D}" stroke-width=".7"/><circle cx="81.9" cy="35.8" r="2.3" fill="${LP}" stroke="${D}" stroke-width=".7"/><circle cx="88.9" cy="35.8" r="2.3" fill="${LP}" stroke="${D}" stroke-width=".7"/>`+
+     `<path d="M81.5 58.5Q80 63 82.6 65.5 85.5 67 88.5 65.8 90.5 62.5 88.8 58.5 86.5 61.5 85 61.5 83.5 61.5 81.5 58.5Z" fill="${F}" stroke="${D}" stroke-width="1"/>`+
+     `<path d="M83 62.5 87.8 62.8" stroke="${D}" stroke-width=".7"/>`
+    :`<path d="M85 63 85 13" stroke="${BR}" stroke-width="2.2" stroke-linecap="round"/>`+
+     `<path d="M85 4.5 89.5 13 85 16.5 80.5 13Z" fill="${G}" stroke="${D}" stroke-width=".9"/>`+
+     `<path d="M81.5 56Q79.5 60.5 82 63.3 84.5 65 87.3 64 89.5 61 88.3 56.5 86 59 84.8 59 83.3 59 81.5 56Z" fill="${F}" stroke="${D}" stroke-width="1"/>`+
+     `<path d="M82.6 59.5 87.5 59.8" stroke="${D}" stroke-width=".7"/>`;
+  const half=hair+robeBase+collar+trim+panel+face+mouth+beard+hem+hat+prop;
+  return `<rect x="8" y="6" width="84" height="128" rx="3" fill="none" stroke="#6f6a5e" stroke-width="1.1"/><rect x="11.5" y="9.5" width="77" height="121" rx="2" fill="none" stroke="#6f6a5e" stroke-width=".55"/>`+
+    pipAt(su,21,34,15,0)+pipAt(su,79,106,15,1)+
+    `<g>${half}</g><g transform="rotate(180 50 70)">${half}</g>`}
+function jokerArt(){
+  const {G,R,B,D,F,E,GR}=CD;
+  return `<path d="M45 25C39 21 34.5 14 36.5 6.5" stroke="currentColor" stroke-width="4.5" fill="none" stroke-linecap="round"/>`+
+    `<path d="M61 25C67 21 71.5 14 69.5 6.5" stroke="currentColor" stroke-width="4.5" fill="none" stroke-linecap="round"/>`+
+    `<path d="M53 24C53 19 53 14 53 9" stroke="currentColor" stroke-width="4.5" fill="none" stroke-linecap="round"/>`+
+    `<circle cx="36.2" cy="5" r="2.8" fill="${G}" stroke="${D}" stroke-width=".9"/><circle cx="69.8" cy="5" r="2.8" fill="${G}" stroke="${D}" stroke-width=".9"/><circle cx="53" cy="7.2" r="2.8" fill="${G}" stroke="${D}" stroke-width=".9"/>`+
+    `<path d="M43.5 26Q53 19.5 62.5 26L62.5 30Q53 24.5 43.5 30Z" fill="currentColor" stroke="${D}" stroke-width="1"/>`+
+    `<circle cx="53" cy="37" r="9" fill="${F}" stroke="${D}" stroke-width="1.3"/>`+
+    `<path d="M48.4 34.4Q50.4 33.2 52.4 34.4" stroke="${D}" stroke-width=".9" fill="none"/>`+
+    `<path d="M53.6 34.4Q55.6 33.2 57.6 34.4" stroke="${D}" stroke-width=".9" fill="none"/>`+
+    `<circle cx="50.4" cy="36.2" r="1" fill="${D}"/><circle cx="55.6" cy="36.2" r="1" fill="${D}"/>`+
+    `<circle cx="46.8" cy="39.5" r="1.4" fill="#e2907f" opacity=".55"/><circle cx="59.2" cy="39.5" r="1.4" fill="#e2907f" opacity=".55"/>`+
+    `<path d="M48.5 40.5Q53 45.5 57.5 40.5" stroke="${D}" stroke-width="1.2" fill="none" stroke-linecap="round"/>`+
+    `<path d="M44.5 45Q46.5 49 49 45.8Q51 49.5 53 46Q55 49.5 57 45.8Q59.5 49 61.5 45L62 48.5Q53 53 44 48.5Z" fill="${E}" stroke="${D}" stroke-width=".9"/>`+
+    `<path d="M46 49 60 49 63.5 68 42.5 68Z" fill="${R}" stroke="${D}" stroke-width="1.2" stroke-linejoin="round"/>`+
+    `<path d="M53 49 60 49 63.5 68 53 68Z" fill="${B}" stroke="${D}" stroke-width="1"/>`+
+    `<path d="M47.5 53.5 50 56.5 47.5 59.5 45 56.5Z" fill="${G}" stroke="${D}" stroke-width=".6"/>`+
+    `<path d="M58.5 53.5 61 56.5 58.5 59.5 56 56.5Z" fill="${G}" stroke="${D}" stroke-width=".6"/>`+
+    `<path d="M43 60.5 63 60.5 63.3 64 42.7 64Z" fill="${G}" stroke="${D}" stroke-width=".9"/>`+
+    `<path d="M46 49.5C41 51 36.5 54.5 33.5 59" stroke="${R}" stroke-width="4.6" fill="none" stroke-linecap="round"/>`+
+    `<circle cx="32.6" cy="60.8" r="2.5" fill="${F}" stroke="${D}" stroke-width=".9"/>`+
+    `<path d="M60 49.5C64.5 47.5 68.5 44 71 39" stroke="${B}" stroke-width="4.6" fill="none" stroke-linecap="round"/>`+
+    `<circle cx="71.8" cy="37.2" r="2.5" fill="${F}" stroke="${D}" stroke-width=".9"/>`+
+    `<path d="M42.5 68 63.5 68 64.5 77Q53 81.5 41.5 77Z" fill="${G}" stroke="${D}" stroke-width="1.1"/>`+
+    `<path d="M47.5 68.5 47 78.5M53 68.5 53 79.5M58.5 68.5 59 78.5" stroke="${D}" stroke-width=".8"/>`+
+    `<path d="M47 80 47 96 52 96 52 80Z" fill="${R}" stroke="${D}" stroke-width="1"/>`+
+    `<path d="M54 80 54 96 59 96 59 80Z" fill="${B}" stroke="${D}" stroke-width="1"/>`+
+    `<path d="M47 84h5M47 88h5M47 92h5M54 84h5M54 88h5M54 92h5" stroke="${E}" stroke-width="1.2"/>`+
+    `<path d="M46.5 96 52.5 96 52.5 99Q48 102.5 43.5 99.5 42.5 96.8 46.5 96Z" fill="${B}" stroke="${D}" stroke-width="1"/>`+
+    `<circle cx="43" cy="98.5" r="1.4" fill="${G}" stroke="${D}" stroke-width=".6"/>`+
+    `<path d="M53.5 96 59.5 96 59.5 99Q55 102.5 50.5 99.5 49.5 96.8 53.5 96Z" fill="${R}" stroke="${D}" stroke-width="1"/>`+
+    `<circle cx="50" cy="98.5" r="1.4" fill="${G}" stroke="${D}" stroke-width=".6"/>`+
+    `<text x="53" y="118" text-anchor="middle" font-size="12" font-weight="800" letter-spacing="2.5" fill="currentColor" stroke="none">JOKER</text>`+
+    `<g fill="#26262e"><svg x="14" y="86" width="9" height="9" viewBox="0 0 100 100">${SUIT.S.p}</svg><svg x="78" y="16" width="9" height="9" viewBox="0 0 100 100">${SUIT.C.p}</svg></g>`+
+    `<g fill="#c02830"><svg x="80" y="84" width="9" height="9" viewBox="0 0 100 100">${SUIT.H.p}</svg><svg x="13" y="18" width="9" height="9" viewBox="0 0 100 100">${SUIT.D.p}</svg></g>`}
+function cornerHtml(rk,su){
+  const ic=su?`<i class="su"><svg viewBox="0 0 100 100">${SUIT[su].p}</svg></i>`:`<i class="su"><svg viewBox="0 0 100 100">${STAR}</svg></i>`;
+  const rc=rk=='10'?'rk ten':'rk';
+  return `<span class="ci tl"><b class="${rc}">${rk}</b>${ic}</span><span class="ci br"><b class="${rc}">${rk}</b>${ic}</span>`}
+function faceHtml(name,cls,owner,rev){
+  name=safeName(name);cls=cls||'';
+  const eye=rev?'<span class="eye">\ud83d\udc41\ufe0f</span>':'';
+  if(name=='Jkr*'){const o=owner===0?'jk-r':'jk-b';
+    return `<span class="pc jk ${o} ${cls}" role="img" aria-label="joker"><svg class="art" viewBox="0 0 100 140">${jokerArt()}</svg>${cornerHtml('J')}${eye}</span>`}
+  const su=name.slice(-1),rk=name.slice(0,-1);
+  if(!SUIT[su])return `<span class="pc ${cls}" role="img" aria-label="unknown card">${cornerHtml('?')}${eye}</span>`;
+  const red=su=='D'||su=='H';
+  const lbl=({A:'ace',J:'jack',Q:'queen',K:'king'}[rk]||rk)+' of '+SUIT[su].n;
+  const art=/^(9|10|A)$/.test(rk)?pipArt(rk,su):courtArt(rk,su);
+  return `<span class="pc ${red?'rd':'bk'} ${cls}" role="img" aria-label="${lbl}"><svg class="art" viewBox="0 0 100 140">${art}</svg>${cornerHtml(rk,su)}${eye}</span>`}
+function backHtml(owner,cls){return `<span class="pc back ${owner===0?'br':'bb'} ${cls||''}" role="img" aria-label="face-down card"></span>`}
+function cardHtml(c){if(!c.name)return backHtml(c.owner);return faceHtml(c.name,'',c.owner,!!c.revealed)}
+const DECK=f=>{const su=f==0?['D','H']:['C','S'];const d=['Jkr*','A'+su[0],'A'+su[1]];for(const r of ['9','10','J','Q','K'])for(const x of su)d.push(r+x);return d};
+function mySetupCount(){let n=0;for(const t of S.board)for(const c of t)if(c.owner==S.human)n++;return n}
+function deadCards(){const D=[[],[]];let L=[];try{L=JSON.parse(M.UTF8ToString(M._cg_log()))}catch(e){}
+  for(const ev of L)for(const c of (ev.combat||[])){const a=c.attacker,d=1-a;if(c.attackerDied)c.att.forEach(n=>D[a].push(n));if(c.defenderDied)c.def.forEach(n=>D[d].push(n))}
+  return D}
+function setSq(){const w=$('board').clientWidth;if(w)document.documentElement.style.setProperty('--sq',(w/7)+'px')}
+
+function renderBoard(){
+  const hr=S.human==0;
+  const combatSq=new Set(lastCombat.map(e=>e.at.join(',')));
+  const dests=new Set();
+  if(sel)for(const a of S.legal)if(!a.spawn&&a.from[0]==sel[0]&&a.from[1]==sel[1])dests.add(a.to.join(','));
+  const spawns=new Set();
+  if(S.phase=='play'&&S.mover==S.human&&!sel)for(const a of S.legal)if(a.spawn)spawns.add(a.to.join(','));
+  const setup=S.phase=='setup_place';
+  let html='';
+  for(let r=0;r<7;r++){const y=hr?6-r:r;
+    for(let x=0;x<7;x++){
+      const cards=cell(x,y);
+      const cl=['sq',((x+y)%2==0?'l':'d')];
+      if(y<=2)cl.push('hr');else if(y>=4)cl.push('hb');
+      if(sel&&sel[0]==x&&sel[1]==y)cl.push('sel');
+      else if(lastMove&&((lastMove.from[0]==x&&lastMove.from[1]==y)||(lastMove.to[0]==x&&lastMove.to[1]==y)))cl.push('last');
+      if(combatSq.has(x+','+y))cl.push('combat');
+      if(dests.has(x+','+y)){cl.push('dest');if(cards.length)cl.push('occ')}
+      if(spawns.has(x+','+y))cl.push('spawn');
+      if(setup&&!cards.length&&((S.human==0&&y<=2)||(S.human==1&&y>=4)))cl.push('dest');
+      const tab=(focusSq?focusSq[0]==x&&focusSq[1]==y:(r==6&&x==0))?0:-1;
+      html+=`<div class="${cl.join(' ')}" data-x="${x}" data-y="${y}" role="button" tabindex="${tab}" aria-label="${sqLabel(x,y,cards,cl)}">`;
+      if(x==0)html+=`<i class="cr">${y}</i>`;
+      if(r==6)html+=`<i class="cf">${x}</i>`;
+      if(cards.length){html+='<div class="stack">'+cards.map(cardHtml).join('')+'</div>';if(cards.length>1)html+=`<b class="n">${cards.length}</b>`}
+      html+='</div>';
+    }}
+  $('board').innerHTML=html}
+
+function sqLabel(x,y,cards,cl){
+  let s='Square '+x+','+y+'. ';
+  if(!cards.length)s+='Empty. ';
+  else{const mine=cards.filter(c=>c.owner==S.human),foe=cards.filter(c=>c.owner!=S.human);
+    const nm=c=>c.name?prettyName(c.name):'face-down card';
+    if(mine.length)s+='Your '+mine.map(nm).join(', ')+'. ';
+    if(foe.length)s+='Enemy '+foe.map(nm).join(', ')+'. '}
+  if(cl.includes('sel'))s+='Selected. ';
+  if(cl.includes('dest'))s+=S.phase=='setup_place'?'You can place a card here. ':'Legal move. ';
+  if(cl.includes('spawn'))s+='Draw a card here. ';
+  if(cl.includes('combat'))s+='Site of the last battle. ';
+  return s}
+
+function renderBars(){
+  const h=S.human,ai=1-h;
+  const D=deadCards();
+  const modelShort=$('model').selectedOptions[0].textContent.split('(')[0].trim();
+  $('barTop').innerHTML=
+    `<span class="avatar ${ai==0?'fr':'fb'}">${ai==0?'\u2665':'\u2660'}</span>`+
+    `<div class="who"><div class="nm">${modelShort}</div><div class="sub">${$('iters').value} sims per move</div></div>`+
+    `<div class="sp"></div>`+
+    `<div class="dead" title="Cards the AI has lost">${D[ai].map(n=>faceHtml(n,'xs',ai)).join('')}</div>`+
+    `<div class="pile" title="AI draw pile">${backHtml(ai,'xs')}<span>&times;${S.draw[ai]}</span></div>`;
+  $('barBottom').innerHTML=
+    `<span class="avatar ${h==0?'fr':'fb'}">${h==0?'\u2665':'\u2660'}</span>`+
+    `<div class="who"><div class="nm">You</div><div class="sub">${h==0?'Red - moves first':'Black - moves second'}</div></div>`+
+    `<div class="sp"></div>`+
+    `<div class="dead" title="Cards you have lost">${D[h].map(n=>faceHtml(n,'xs',h)).join('')}</div>`+
+    `<div class="pile" title="Your draw pile">${backHtml(h,'xs')}<span>&times;${S.draw[h]}</span></div>`}
+
+function renderScout(){
+  const el=$('scout');
+  if(S.phase!='play'){el.innerHTML='';return}
+  const ai=1-S.human;
+  const D=deadCards();
+  const seen=new Set(D[ai]);
+  for(const t of S.board)for(const c of t)if(c.owner==ai&&c.name)seen.add(c.name);
+  const unseen=DECK(ai).filter(n=>!seen.has(n));
+  el.innerHTML=`<details><summary title="Cards the AI has never revealed - still hidden on the board or in its draw pile">AI cards you haven't seen yet (${unseen.length})</summary><div class="list">${unseen.map(n=>faceHtml(n,'xs',ai)).join('')}</div></details>`}
+
+function renderStatus(){
+  let h='';const over=S.phase=='over';
+  if(S.phase=='setup_place'){const n=mySetupCount();
+    h=`<span><b>Setup - card ${n+1} of 7.</b> Place your ${faceHtml(S.pending,'sm',S.human)} on a highlighted square in your home rows.</span>`}
+  else if(S.phase=='setup_draft'){const n=mySetupCount();
+    h=`<span><b>Setup - ${n} of 7 placed.</b> Choose which card to place next; the rest stay in your draw pile.</span>`}
+  else if(S.phase=='play'){const mine=S.mover==S.human;
+    if(mine){const spawnOk=S.legal.some(a=>a.spawn);
+      const hint=sel?' Tap a highlighted square to move it.':(spawnOk?' Tap one of your cards, then a highlighted square - or tap a glowing back-row square to draw a card (ends your turn).':' Tap one of your cards, then tap a highlighted square to move it.');
+      h=`<span class="tdot"></span><span><b>Your turn</b> - ${S.movesRemaining} of 3 moves left.${hint}</span>`}
+    else h=`<span class="spin"></span><span>AI is thinking&hellip;</span>`}
+  else if(over){h=`<span><b>Game over - ${RES[S.result]}</b></span>`}
+  $('status').innerHTML=h;
+  $('status').classList.toggle('over',over)}
+
+function renderActions(){
+  const A=$('actions');A.innerHTML='';
+  if(S.phase=='play'&&S.mover==S.human&&S.legal.length==0){
+    const b=document.createElement('button');b.className='btn';b.textContent='No legal action - pass';b.onclick=()=>act(0);A.appendChild(b)}
+  if(S.phase=='over'){
+    const b=document.createElement('button');b.className='btn primary';b.textContent='Play again';b.onclick=()=>newGame();A.appendChild(b)}}
+
+function renderChooser(){
+  const C=$('chooser');
+  if(!(pendingDest&&sel&&S.phase=='play')){C.classList.add('hidden');C.innerHTML='';return}
+  const cands=[];
+  S.legal.forEach((a,i)=>{if(!a.spawn&&a.from[0]==sel[0]&&a.from[1]==sel[1]&&a.to[0]==pendingDest[0]&&a.to[1]==pendingDest[1])cands.push({i,card:a.card})});
+  if(!cands.length){pendingDest=null;C.classList.add('hidden');C.innerHTML='';return}
+  C.innerHTML=`<div class="t">Which card moves?</div><div class="cs"></div><button class="btn" type="button">Cancel</button>`;
+  const cs=C.querySelector('.cs');
+  cands.forEach(c=>{const b=document.createElement('button');b.type='button';b.className='cbtn';
+    b.innerHTML=faceHtml(c.card,'big',S.human)+`<span class="nm">${prettyName(c.card)}</span>`;
+    b.onclick=()=>act(c.i);cs.appendChild(b)});
+  C.querySelector('.btn').onclick=()=>{pendingDest=null;render()};
+  C.classList.remove('hidden');
+  const firstC=C.querySelector('.cbtn');if(firstC)firstC.focus()}
+
+function renderDraft(){
+  const D=$('draft');
+  if(S.phase!='setup_draft'){D.classList.add('hidden');D.innerHTML='';return}
+  D.innerHTML=`<div class="sheet"><h3>Pick your next card</h3><div class="sub">The cards you skip stay in your draw pile.</div><div class="draft-cards"></div></div>`;
+  const dc=D.querySelector('.draft-cards');
+  S.pool.forEach((c,i)=>{const b=document.createElement('button');b.type='button';b.className='cbtn';
+    b.innerHTML=faceHtml(c,'big',S.human)+`<span class="nm">${prettyName(c)}</span>`;
+    b.onclick=()=>{M._cg_draft(i);render();maybeAI()};dc.appendChild(b)});
+  D.classList.remove('hidden');
+  const first=dc.querySelector('.cbtn');if(first)first.focus()}
+
+function render(){
+  S=st();setSq();
+  const refocus=focusSq&&!pendingDest&&S.phase!='setup_draft'&&$('board').contains(document.activeElement);
+  renderBoard();renderBars();renderStatus();renderActions();renderChooser();renderDraft();renderScout();
+  if(refocus){const t=document.querySelector(`[data-x="${focusSq[0]}"][data-y="${focusSq[1]}"]`);if(t)t.focus()}}
+
+function click(x,y){
+  if(!S)return;
+  if(S.phase=='setup_place'){
+    if(!M._cg_place(x,y)){$('status').innerHTML='<span>That square is not available - pick a highlighted empty square in your home rows.</span>';return}
+    render();maybeAI();return}
+  if(S.phase!='play'||S.mover!=S.human)return;
+  if(sel){
+    const m=[];S.legal.forEach((a,i)=>{if(!a.spawn&&a.from[0]==sel[0]&&a.from[1]==sel[1]&&a.to[0]==x&&a.to[1]==y)m.push(i)});
+    if(m.length==1)return act(m[0]);
+    if(m.length>1){pendingDest=[x,y];render();return}}
+  pendingDest=null;
+  if(!sel){const si=S.legal.findIndex(a=>a.spawn&&a.to[0]==x&&a.to[1]==y);if(si>=0)return act(si)}
+  sel=S.legal.some(a=>!a.spawn&&a.from[0]==x&&a.from[1]==y)?[x,y]:null;
+  render()}
+
+function act(i){pendingDest=null;sel=null;M._cg_human_act(i);syncLog();save();render();maybeAI()}
+
+function maybeAI(){S=st();
+  if(S.phase=='play'&&S.mover!=S.human&&!aiBusy){aiBusy=true;setTimeout(()=>{M._cg_ai_step();aiBusy=false;syncLog();save();render();maybeAI()},350)}
+  else if(S.phase=='play'&&S.mover==S.human){syncLog();save()}
+  else if(S.phase=='over'){syncLog();save();render()}}
+
+// NOTE: lastCombat intentionally persists until the next battle (or new game) -
+// the red ring marks the site of the most recent battle rather than clearing on
+// the next action as main's did. Deliberate UX choice from the redesign.
+function syncLog(){
+  const L=JSON.parse(M.UTF8ToString(M._cg_log()));
+  for(;logSeen<L.length;logSeen++){const ev=L[logSeen];
+    if(ev.ev=='act'){lastMove={from:ev.a.from,to:ev.a.to};if(ev.combat&&ev.combat.length)lastCombat=ev.combat}
+    else if(ev.ev=='pass'){lastMove=null;if(ev.combat&&ev.combat.length)lastCombat=ev.combat}
+    const d=describe(ev);if(d){const pe=$('logEmpty');if(pe)pe.remove();$('log').insertAdjacentHTML('beforeend',d)}}
+  const lg=$('log');lg.scrollTop=lg.scrollHeight}
+
+function describe(ev){
+  if(ev.ev=='act'){const mine=ev.mover==S.human;const who=mine?'You':'AI';const a=ev.a;let t;
+    if(a.spawn)t=`<div class="mv"><b class="${mine?'you':'ai'}">${who}</b> drew ${mine&&ev.spawned?faceHtml(ev.spawned,'sm',ev.mover):'a card'} onto column ${a.to[0]}</div>`;
+    else t=`<div class="mv"><b class="${mine?'you':'ai'}">${who}</b> ${mine&&a.card?faceHtml(a.card,'sm',ev.mover):''} (${a.from}) &rarr; (${a.to})</div>`;
+    for(const c of (ev.combat||[]))t+=`<div class="mv cb">Combat at (${c.at}): ${c.att.map(n=>faceHtml(n,'sm',c.attacker)).join('')} vs ${c.def.map(n=>faceHtml(n,'sm',1-c.attacker)).join('')} - ${c.attackerDied&&c.defenderDied?'both sides destroyed':c.attackerDied?'attacker destroyed':'defender destroyed'}</div>`;
+    return t}
+  if(ev.ev=='pass')return `<div class="mv"><b class="${ev.mover==S.human?'you':'ai'}">${ev.mover==S.human?'You':'AI'}</b> had no legal action - turn passes</div>`;
+  if(ev.ev=='end')return `<div class="mv end">Game over - ${RES[ev.result]}</div>`;
+  return null}
+
 function save(){if(!gameId)return;const all=JSON.parse(localStorage.getItem('checardsGames')||'{}');all[gameId]=JSON.parse(M.UTF8ToString(M._cg_log()));localStorage.setItem('checardsGames',JSON.stringify(all));$('saved').textContent=Object.keys(all).length+' game(s) saved in this browser.'}
 function download(name,obj){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(obj,null,1)],{type:'application/json'}));a.download=name;a.click()}
-function describe(ev){if(ev.ev=='act'){const who=ev.mover==S.human?'You':'AI';const a=ev.a;let t=a.spawn?`${who}: spawn at column ${a.to[0]}${ev.mover==S.human&&ev.spawned?' ('+ev.spawned+')':''}`:`${who}: ${ev.mover==S.human?a.card+' ':''}(${a.from})->(${a.to})`;
- for(const c of ev.combat)t+=`\n   combat at (${c.at}): ${c.att.join(' ')} vs ${c.def.join(' ')} - attacker ${c.attackerDied?'destroyed':'survives'}, defender ${c.defenderDied?'destroyed':'survives'}`;return t}
- if(ev.ev=='pass')return (ev.mover==S.human?'You':'AI')+': no legal action, turn passes';if(ev.ev=='end')return 'GAME OVER: '+RES[ev.result];return null}
-let logSeen=0;function syncLog(){const L=JSON.parse(M.UTF8ToString(M._cg_log()));for(;logSeen<L.length;logSeen++){const d=describe(L[logSeen]);if(d)logLine(d)}}
-function render(){S=st();const t=$('board');t.innerHTML='';const hr=S.human==0;const combatSq=new Set((S.events||[]).map(e=>e.at.join(',')));
- const dests=new Set();if(sel)for(const a of S.legal)if(!a.spawn&&a.from[0]==sel[0]&&a.from[1]==sel[1])dests.add(a.to.join(','));
- for(let r=0;r<7;r++){const tr=t.insertRow();const y=hr?6-r:r;for(let x=0;x<7;x++){const td=tr.insertCell();const home=hr?y<=2:y>=4;
-  if(home)td.classList.add('home');if(sel&&sel[0]==x&&sel[1]==y)td.classList.add('sel');if(dests.has(x+','+y))td.classList.add('dest');if(combatSq.has(x+','+y))td.classList.add('combat');
-  td.innerHTML=cell(x,y).map(cardHtml).join('')+`<span class="coord">${x},${y}</span>`;td.onclick=()=>click(x,y)}}
- const A=$('actions');A.innerHTML='';let s='';
- if(S.phase=='setup_place')s=`Setup: click a square in your home rows to place ${S.pending}.`;
- else if(S.phase=='setup_draft'){s='Setup: pick your next card to place.';S.pool.forEach((c,i)=>{const b=document.createElement('button');b.textContent=c;b.onclick=()=>{M._cg_draft(i);render();maybeAI()};A.appendChild(b)})}
- else if(S.phase=='play'){const mine=S.mover==S.human;s=`Turn ${S.turn} - ${mine?'your move':'AI thinking...'} | moves left ${S.movesRemaining} | draw piles: you ${S.draw[S.human]}, AI ${S.draw[1-S.human]}`;
-  if(mine){if(S.legal.length==0){const b=document.createElement('button');b.textContent='No legal action - pass';b.onclick=()=>act(0);A.appendChild(b)}
-   S.legal.forEach((a,i)=>{if(a.spawn){const b=document.createElement('button');b.textContent='Spawn at column '+a.to[0];b.onclick=()=>act(i);A.appendChild(b)}});
-   if(sel&&pendingDest){S.legal.forEach((a,i)=>{if(!a.spawn&&a.from[0]==sel[0]&&a.from[1]==sel[1]&&a.to[0]==pendingDest[0]&&a.to[1]==pendingDest[1]){const b=document.createElement('button');b.textContent='Move '+a.card;b.onclick=()=>act(i);A.appendChild(b)}})}}}
- else if(S.phase=='over')s='Game over: '+RES[S.result]+' - log saved.';
- $('status').textContent=s;renderDead()}
-let pendingDest=null;
-function act(i){pendingDest=null;sel=null;M._cg_human_act(i);syncLog();save();render();maybeAI()}
-function click(x,y){if(!S)return;if(S.phase=='setup_place'){if(!M._cg_place(x,y)){$('status').textContent='Not a legal setup square.';return}render();maybeAI();return}
- if(S.phase!='play'||S.mover!=S.human)return;
- if(sel){const m=[];S.legal.forEach((a,i)=>{if(!a.spawn&&a.from[0]==sel[0]&&a.from[1]==sel[1]&&a.to[0]==x&&a.to[1]==y)m.push(i)});
-  if(m.length==1)return act(m[0]);if(m.length>1){pendingDest=[x,y];render();$('status').textContent='Several of your cards can make that move - pick which one below.';return}}
- pendingDest=null;sel=S.legal.some(a=>!a.spawn&&a.from[0]==x&&a.from[1]==y)?[x,y]:null;render()}
-function maybeAI(){S=st();if(S.phase=='play'&&S.mover!=S.human&&!aiBusy){aiBusy=true;setTimeout(()=>{M._cg_ai_step();aiBusy=false;syncLog();save();render();maybeAI()},350)}
- else if(S.phase=='play'&&S.mover==S.human){syncLog();save()} else if(S.phase=='over'){syncLog();save();render()}}
-function newGame(){gameId=new Date().toISOString();logSeen=0;$('log').textContent='';sel=null;pendingDest=null;
- const seed=(Math.random()*4e9)>>>0;M.ccall('cg_new','number',['string','number','number','number'],[$('model').value,+$('side').value,+$('iters').value,seed]);syncLog();render();maybeAI()}
-$('newg').onclick=newGame;$('dl').onclick=()=>download('checards-game-'+gameId+'.json',JSON.parse(M.UTF8ToString(M._cg_log())));
+
+function savePrefs(){try{localStorage.setItem('checardsUI',JSON.stringify({model:$('model').value,iters:$('iters').value,side:$('side').value}))}catch(e){}}
+function loadPrefs(){try{const p=JSON.parse(localStorage.getItem('checardsUI')||'null');if(!p)return;for(const k of ['model','iters','side'])if(p[k]&&$(k).querySelector(`option[value="${p[k]}"]`))$(k).value=p[k]}catch(e){}}
+
+function newGame(){
+  gameId=new Date().toISOString();logSeen=0;$('log').innerHTML='<div class="muted" id="logEmpty">Moves will appear here once the game starts.</div>';sel=null;pendingDest=null;lastMove=null;lastCombat=[];
+  savePrefs();
+  const seed=(Math.random()*4e9)>>>0;
+  M.ccall('cg_new','number',['string','number','number','number'],[$('model').value,+$('side').value,+$('iters').value,seed]);
+  syncLog();render();maybeAI()}
+
+function showTab(name){
+  document.querySelectorAll('.tab-btn').forEach(b=>{const on=b.dataset.tab==name;b.classList.toggle('active',on);b.setAttribute('aria-selected',on);b.tabIndex=on?0:-1});
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.toggle('active',p.id=='pane-'+name))}
+document.querySelector('.tabs').addEventListener('keydown',e=>{
+  if(e.key!='ArrowLeft'&&e.key!='ArrowRight')return;
+  const bs=[...document.querySelectorAll('.tab-btn')];
+  let i=bs.indexOf(document.activeElement);if(i<0)return;
+  i=(i+(e.key=='ArrowRight'?1:bs.length-1))%bs.length;
+  bs[i].focus();showTab(bs[i].dataset.tab)});
+
+$('board').addEventListener('click',e=>{const sq=e.target.closest('.sq');if(sq){focusSq=[+sq.dataset.x,+sq.dataset.y];click(+sq.dataset.x,+sq.dataset.y)}});
+$('board').addEventListener('keydown',e=>{
+  const sq=e.target.closest('.sq');if(!sq||!S)return;
+  const x=+sq.dataset.x,y=+sq.dataset.y,hr=S.human==0;
+  let nx=x,ny=y;
+  if(e.key=='ArrowLeft')nx=x-1;else if(e.key=='ArrowRight')nx=x+1;
+  else if(e.key=='ArrowUp')ny=hr?y+1:y-1;else if(e.key=='ArrowDown')ny=hr?y-1:y+1;
+  else if(e.key=='Enter'||e.key==' '){e.preventDefault();focusSq=[x,y];click(x,y);return}
+  else if(e.key=='Escape'){sel=null;pendingDest=null;render();return}
+  else return;
+  e.preventDefault();
+  if(nx<0||nx>6||ny<0||ny>6)return;
+  focusSq=[nx,ny];
+  document.querySelectorAll('.sq').forEach(s2=>s2.tabIndex=-1);
+  const t=document.querySelector(`[data-x="${nx}"][data-y="${ny}"]`);
+  if(t){t.tabIndex=0;t.focus()}});
+document.addEventListener('keydown',e=>{
+  if(e.key!='Escape')return;
+  if(!$('helpScrim').classList.contains('hidden')){closeHelp();return}
+  if(!$('chooser').classList.contains('hidden')){pendingDest=null;render()}});
+function trapTab(dlg,e){
+  if(e.key!='Tab')return;
+  const bs=[...dlg.querySelectorAll('button')];if(!bs.length)return;
+  const i=bs.indexOf(document.activeElement);
+  if(e.shiftKey&&i<=0){e.preventDefault();bs[bs.length-1].focus()}
+  else if(!e.shiftKey&&i==bs.length-1){e.preventDefault();bs[0].focus()}}
+$('draft').addEventListener('keydown',e=>trapTab($('draft'),e));
+$('chooser').addEventListener('keydown',e=>trapTab($('chooser'),e));
+document.querySelectorAll('.tab-btn').forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
+function openHelp(){$('helpScrim').classList.remove('hidden');$('helpClose').focus()}
+function closeHelp(){$('helpScrim').classList.add('hidden');$('helpBtn').focus()}
+$('helpBtn').onclick=openHelp;
+$('helpClose').onclick=closeHelp;
+$('helpScrim').addEventListener('click',e=>{if(e.target===$('helpScrim'))closeHelp()});
+$('helpScrim').addEventListener('keydown',e=>trapTab($('helpScrim'),e));
+$('newgTop').onclick=()=>{showTab('newgame');if(innerWidth<=920)$('sidePanel').scrollIntoView({behavior:reducedMotion()?'auto':'smooth'})};
+$('newg').onclick=()=>{showTab('moves');newGame();if(innerWidth<=920)$('boardWrap').scrollIntoView({behavior:reducedMotion()?'auto':'smooth'})};
+$('dl').onclick=()=>download('checards-game-'+gameId+'.json',JSON.parse(M.UTF8ToString(M._cg_log())));
 $('dlall').onclick=()=>download('checards-all-games.json',JSON.parse(localStorage.getItem('checardsGames')||'{}'));
+window.addEventListener('resize',setSq);
+
 function autotest(n){let k=0;const tick=()=>{S=st();if(k++>=n||S.phase=='over'){render();return}
- if(S.phase=='setup_place'){while(!M._cg_place(Math.floor(Math.random()*7),S.human==0?Math.floor(Math.random()*3):4+Math.floor(Math.random()*3)));}
- else if(S.phase=='setup_draft')M._cg_draft(0);else if(S.mover==S.human)M._cg_human_act(S.legal.length?Math.floor(Math.random()*S.legal.length):0);else M._cg_ai_step();
- syncLog();tick()};tick();const f=S.legal.find(a=>!a.spawn);if(f){sel=f.from;render()}}
-CheckardsEngine().then(m=>{M=m;newGame();const q=new URLSearchParams(location.search);if(q.get('autotest')){aiBusy=true;autotest(+q.get('autotest'))}});
+  if(S.phase=='setup_place'){while(!M._cg_place(Math.floor(Math.random()*7),S.human==0?Math.floor(Math.random()*3):4+Math.floor(Math.random()*3)));}
+  else if(S.phase=='setup_draft')M._cg_draft(0);
+  else if(S.mover==S.human)M._cg_human_act(S.legal.length?Math.floor(Math.random()*S.legal.length):0);else M._cg_ai_step();
+  syncLog();tick()};tick();const f=S.legal.find(a=>!a.spawn);if(f){sel=f.from;render()}}
+
+loadPrefs();
+CheckardsEngine().then(m=>{M=m;newGame();
+  try{if(!localStorage.getItem('checardsHelpSeen')){openHelp();localStorage.setItem('checardsHelpSeen','1')}}catch(e){}
+  const q=new URLSearchParams(location.search);if(q.get('autotest')){aiBusy=true;autotest(+q.get('autotest'))}});
+</script>
+<script>
+/* Interactive help guide: step-through sections with animated demos.
+   Owns #pane-help only. Reuses the page's faceHtml/backHtml card helpers. */
+(function(){
+const G=document.getElementById('helpGuide');if(!G)return;
+const RM=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
+const EYE='\ud83d\udc41\ufe0f';
+function card(name,owner,rev){return faceHtml(name,'sm',owner==null?0:owner,!!rev)}
+function backCard(owner,cls){return backHtml(owner,cls||'sm')}
+function mini(cols,rows){
+  const m=document.createElement('div');m.className='mini';
+  m.style.gridTemplateColumns='repeat('+cols+', var(--msq))';
+  for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
+    const s=document.createElement('div');s.className='msq '+(((x+y)%2==0)?'l':'d');m.appendChild(s)}
+  return m}
+function sq(m,cols,x,y){return m.children[y*cols+x]}
+function flyer(m,html){const f=document.createElement('div');f.className='fly';f.innerHTML=html;m.appendChild(f);return f}
+function place(f,x,y){f.style.setProperty('--fx',x);f.style.setProperty('--fy',y)}
+function cap(host){const c=document.createElement('div');c.className='cap';host.appendChild(c);return c}
+function ring(el){if(el)el.classList.add('act')}
+function trail(el){if(el)el.classList.add('trail')}
+function clearFx(m){for(const q of m.children)q.classList.remove('act','trail')}
+
+/* Step 0 - Goal: an attacker hunts down both enemy Aces */
+const dGoal=(function(){
+  let m,att,a1,a2,win,capt;const COLS=6;
+  function build(host){
+    m=mini(COLS,1);
+    a1=flyer(m,card('AC',1));a2=flyer(m,card('AS',1));att=flyer(m,card('KH',0));
+    host.appendChild(m);
+    win=document.createElement('span');win.className='gwin gfade';win.textContent='Both enemy Aces down - Red wins!';
+    host.appendChild(win);
+    capt=cap(host);capt.textContent='Hunt down both enemy Aces.'}
+  function reset(){
+    [a1,a2,att].forEach(f=>{const c=f.firstChild;c.classList.remove('gdie');c.style.opacity=''});
+    sq(m,COLS,2,0).classList.remove('cb');sq(m,COLS,4,0).classList.remove('cb');
+    clearFx(m);
+    win.classList.add('gfade');win.classList.remove('gpop');
+    place(att,0,0);place(a1,2,0);place(a2,4,0)}
+  function step(t){t=t%7;
+    if(t==0)reset();
+    else if(t==1){trail(sq(m,COLS,0,0));ring(sq(m,COLS,2,0));place(att,2,0);sq(m,COLS,2,0).classList.add('cb')}
+    else if(t==2)a1.firstChild.classList.add('gdie');
+    else if(t==3){sq(m,COLS,2,0).classList.remove('act');trail(sq(m,COLS,2,0));ring(sq(m,COLS,4,0));place(att,4,0);sq(m,COLS,4,0).classList.add('cb')}
+    else if(t==4){a2.firstChild.classList.add('gdie');win.classList.remove('gfade');win.classList.add('gpop')}}
+  function statik(){reset();place(att,4,0);
+    a1.firstChild.style.opacity=0;a2.firstChild.style.opacity=0;
+    sq(m,COLS,2,0).classList.add('cb');sq(m,COLS,4,0).classList.add('cb');
+    win.classList.remove('gfade')}
+  return{build:build,step:step,statik:statik}})();
+
+/* Step 1 - Your cards: the 13-card deck flips over one at a time */
+const dCards=(function(){
+  let slots,capt;const NAMES=['Jkr*','AD','AH','9D','10D','JD','QD','KD','9H','10H','JH','QH','KH'];
+  function build(host){
+    const row=document.createElement('div');row.className='g-row';row.style.gap='4px';row.style.alignItems='center';
+    slots=NAMES.map(()=>{const s=document.createElement('span');s.innerHTML=backCard(0,'xs');row.appendChild(s);return s});
+    host.appendChild(row);capt=cap(host)}
+  function reset(){slots.forEach(s=>{s.innerHTML=backCard(0,'xs')});capt.textContent='13 cards in your personal deck.'}
+  function step(t){t=t%16;
+    if(t==0)reset();
+    else if(t<=13){const i=t-1;slots[i].firstChild.classList.add('gflip');
+      setTimeout(()=>{slots[i].innerHTML=faceHtml(NAMES[i],'xs',0)},170);
+      if(t==13)capt.textContent='1 Joker, 2 Aces, and 9 through K of each of your two suits.'}}
+  function statik(){slots.forEach((s,i)=>{s.innerHTML=faceHtml(NAMES[i],'xs',0)});
+    capt.textContent='1 Joker, 2 Aces, and 9 through K of each of your two suits.'}
+  return{build:build,step:step,statik:statik}})();
+
+/* Step 2 - Setup: 7 cards placed one at a time in the home rows */
+const dSetup=(function(){
+  let m,capt;const COLS=7;
+  const PL=[['AD',3,2],['AH',5,1],['KH',1,2],['9D',4,2],['QH',0,1],['10D',6,2],['JH',2,0]];
+  function build(host){m=mini(COLS,3);host.appendChild(m);capt=cap(host)}
+  function reset(){for(const s of m.children){s.innerHTML='';s.classList.remove('act','trail')}capt.textContent='Your two Aces go down first.'}
+  function step(t){t=t%10;
+    if(t==0)reset();
+    else if(t<=7){const p=PL[t-1];const s=sq(m,COLS,p[1],p[2]);s.innerHTML=card(p[0],0);s.firstChild.classList.add('gpop');
+      for(const q of m.children)q.classList.remove('act');ring(s);
+      capt.textContent=t<=2?'Card '+t+' of 7 - your Aces first.':'Card '+t+' of 7 - now your picks, in the order you choose.'}
+    else if(t==8)capt.textContent='The 6 cards you skip become your draw pile.'}
+  function statik(){reset();PL.forEach(p=>{sq(m,COLS,p[1],p[2]).innerHTML=card(p[0],0)});
+    capt.textContent='The 6 cards you skip become your draw pile.'}
+  return{build:build,step:step,statik:statik}})();
+
+/* Step 3 - A turn: one card glides through 3 moves; a draw spawns on the back row */
+const dTurn=(function(){
+  let mm,mcap,mfly,sm,scap;
+  const PATH=[[0,1],[1,1],[2,0],[3,0]];
+  function build(host){
+    mm=mini(5,2);mfly=flyer(mm,card('KH',0));
+    host.appendChild(mm);mcap=cap(host);
+    const d2=document.getElementById('gdSpawn');
+    sm=mini(7,1);d2.appendChild(sm);scap=cap(d2)}
+  function reset(){
+    clearFx(mm);
+    place(mfly,PATH[0][0],PATH[0][1]);
+    mcap.textContent='One move: one of your cards to a neighbouring square. 3 moves left.';
+    const s4=sq(sm,7,4,0);s4.innerHTML='';s4.classList.add('sp');
+    scap.textContent='Or draw instead - the open squares of your back row glow.'}
+  function step(t){
+    const tm=t%6;
+    if(tm==0)place(mfly,PATH[0][0],PATH[0][1]);
+    else if(tm==1){trail(sq(mm,5,0,1));ring(sq(mm,5,1,1));place(mfly,1,1);mcap.textContent='2 moves left.'}
+    else if(tm==2){sq(mm,5,1,1).classList.remove('act');trail(sq(mm,5,1,1));ring(sq(mm,5,2,0));place(mfly,2,0);mcap.textContent='Diagonals count too. 1 move left.'}
+    else if(tm==3){sq(mm,5,2,0).classList.remove('act');trail(sq(mm,5,2,0));ring(sq(mm,5,3,0));place(mfly,3,0);mcap.textContent='0 moves left - your turn is over.'}
+    const ts=t%7;
+    if(ts==0){const s4=sq(sm,7,4,0);s4.innerHTML='';s4.classList.add('sp');
+      scap.textContent='Or draw instead - the open squares of your back row glow.'}
+    else if(ts==1){const s4=sq(sm,7,4,0);s4.innerHTML=backCard(0);s4.firstChild.classList.add('gpop')}
+    else if(ts==2){const s4=sq(sm,7,4,0);s4.firstChild.classList.add('gflip');
+      setTimeout(()=>{s4.innerHTML=card('QH',0)},170);
+      scap.textContent='The top card of your draw pile joins your army.'}
+    else if(ts==3){sq(sm,7,4,0).classList.remove('sp');scap.textContent='Drawing uses your whole turn.'}}
+  function statik(){
+    clearFx(mm);trail(sq(mm,5,0,1));trail(sq(mm,5,1,1));trail(sq(mm,5,2,0));ring(sq(mm,5,3,0));
+    place(mfly,3,0);mcap.textContent='0 moves left - your turn is over.';
+    const s4=sq(sm,7,4,0);s4.innerHTML=card('QH',0);s4.classList.remove('sp');
+    scap.textContent='Drawing uses your whole turn.'}
+  return{build:build,step:function(t){if(t==0)reset();else step(t)},statik:statik}})();
+
+/* Step 4 - Combat: three battles cycle, each showing the rule that decides it */
+const dCombat=(function(){
+  let m,capt,attFly,defSq;const COLS=5;
+  const SC=[
+    {att:['KH'],def:['10C'],kill:'def',cap:'13 vs 10 - the higher total wins; the losing stack is destroyed.'},
+    {att:['KH'],def:['Jkr*'],kill:'att',cap:'A defending Joker beats any attack without an Ace.'},
+    {att:['AD'],def:['KS','9S'],kill:'def',cap:'An attacking Ace beats anything but a defending Joker.'}];
+  function build(host){m=mini(COLS,2);attFly=flyer(m,'');host.appendChild(m);capt=cap(host);defSq=sq(m,COLS,2,1)}
+  function setup(sc){
+    attFly.innerHTML=sc.att.map(n=>card(n,0)).join('');
+    defSq.innerHTML='<div class="mstack">'+sc.def.map(()=>backCard(1)).join('')+'</div>';
+    defSq.classList.remove('cb');
+    attFly.style.setProperty('--ox','0px');
+    defSq.classList.remove('act');
+    place(attFly,0,1);capt.textContent=sc.cap}
+  function step(t){
+    const sc=SC[Math.floor(t/6)%SC.length],p=t%6;
+    if(p==0)setup(sc);
+    else if(p==1){ring(defSq);place(attFly,2,1);attFly.style.setProperty('--ox','-8px');defSq.querySelector('.mstack').style.marginLeft='10px'}
+    else if(p==2){
+      defSq.querySelector('.mstack').innerHTML=sc.def.map(n=>faceHtml(n,'sm',1)).join('');
+      defSq.querySelectorAll('.pc').forEach(pc=>pc.classList.add('gflip'));
+      defSq.classList.add('cb')}
+    else if(p==3){
+      if(sc.kill=='def')defSq.querySelectorAll('.pc').forEach(pc=>pc.classList.add('gdie'));
+      else attFly.querySelectorAll('.pc').forEach(pc=>pc.classList.add('gdie'))}}
+  function statik(){const sc=SC[0];setup(sc);place(attFly,2,1);attFly.style.setProperty('--ox','-8px');defSq.querySelector('.mstack').style.marginLeft='10px';
+    defSq.querySelector('.mstack').innerHTML=sc.def.map(n=>faceHtml(n,'sm',1)).join('');
+    defSq.querySelectorAll('.pc').forEach(pc=>{pc.style.opacity=.35});
+    defSq.classList.add('cb')}
+  return{build:build,step:step,statik:statik}})();
+
+/* Step 5 - Hidden cards: a face-down enemy stack is revealed by battle; your seen card gets the eye */
+const dHidden=(function(){
+  let figA,figB,capt;
+  function build(host){
+    const row=document.createElement('div');row.className='g-row';
+    figA=document.createElement('div');figA.className='g-fig';
+    figB=document.createElement('div');figB.className='g-fig';
+    row.appendChild(figA);row.appendChild(figB);host.appendChild(row);
+    capt=cap(host)}
+  function render(aFaces,bEye){
+    figA.innerHTML='<div class="cc">'+(aFaces?faceHtml('9C','sm',1,true)+faceHtml('AS','sm',1,true):backCard(1)+backCard(1))+'</div><div class="lbl">enemy stack</div>';
+    figB.innerHTML='<div class="cc">'+faceHtml('KH','sm',0,bEye)+'</div><div class="lbl">your card</div>'}
+  function step(t){t=t%6;
+    if(t==0){render(false,false);capt.textContent='Enemy cards stay face down until they fight.'}
+    else if(t==1){figA.querySelectorAll('.pc').forEach(pc=>pc.classList.add('gflip'));
+      setTimeout(()=>{render(true,false)},170);
+      capt.textContent='Battle reveals every card that took part, on both sides.'}
+    else if(t==2){render(true,true);
+      capt.textContent='The '+EYE+' marks what has been seen - your own cards included.'}}
+  function statik(){render(true,true);
+    capt.textContent='The '+EYE+' marks what has been seen - your own cards included.'}
+  return{build:build,step:step,statik:statik}})();
+
+const demos=[dGoal,dCards,dSetup,dTurn,dCombat,dHidden];
+const hosts=['gdGoal','gdCards','gdSetup','gdMove','gdCombat','gdHidden'];
+const secs=[...G.querySelectorAll('.g-step')];
+const dotsOl=document.getElementById('gDots');
+const backBtn=document.getElementById('gBack'),nextBtn=document.getElementById('gNext'),countEl=document.getElementById('gCount');
+const progEl=document.getElementById('gProg');
+secs.forEach((s,i)=>{
+  const li=document.createElement('li');const b=document.createElement('button');
+  b.type='button';b.className='g-seg';
+  const f=document.createElement('span');f.className='g-fill';f.setAttribute('aria-hidden','true');
+  const lab=document.createElement('span');lab.className='g-lab';
+  const n=document.createElement('span');n.className='gn';n.textContent=i+1;
+  lab.appendChild(n);lab.appendChild(document.createTextNode(s.dataset.short||s.dataset.name));
+  b.setAttribute('aria-label',s.dataset.name);
+  b.appendChild(f);b.appendChild(lab);
+  b.addEventListener('click',()=>show(i,true));
+  li.appendChild(b);dotsOl.appendChild(li)});
+const dots=[...dotsOl.querySelectorAll('.g-seg')];
+demos.forEach((d,i)=>d.build(document.getElementById(hosts[i])));
+let cur=0,timer=null;
+function stopDemo(){if(timer){clearInterval(timer);timer=null}}
+function startDemo(){stopDemo();const d=demos[cur];if(!d)return;
+  if(RM()){if(d.statik)d.statik();return}
+  d.step(0);let t=1;
+  timer=setInterval(()=>{if(!G.offsetParent)return;d.step(t++)},700)}
+function show(i,focus){
+  cur=Math.max(0,Math.min(secs.length-1,i));
+  secs.forEach((s,j)=>s.classList.toggle('active',j==cur));
+  dots.forEach((d,j)=>{d.classList.toggle('done',j<cur);d.classList.toggle('cur',j==cur);
+    if(j==cur)d.setAttribute('aria-current','step');else d.removeAttribute('aria-current')});
+  backBtn.disabled=cur==0;nextBtn.disabled=cur==secs.length-1;
+  countEl.textContent=(cur+1)+' / '+secs.length;
+  progEl.setAttribute('aria-valuenow',cur+1);
+  progEl.textContent=(cur+1)+' of '+secs.length;
+  if(focus)secs[cur].querySelector('h3').focus({preventScroll:true});
+  startDemo()}
+backBtn.addEventListener('click',()=>show(cur-1,true));
+nextBtn.addEventListener('click',()=>show(cur+1,true));
+G.addEventListener('keydown',e=>{
+  if(e.key=='ArrowRight'||e.key=='ArrowLeft'){e.preventDefault();show(cur+(e.key=='ArrowRight'?1:-1),true)}
+  else if(e.key=='Home'){e.preventDefault();show(0,true)}
+  else if(e.key=='End'){e.preventDefault();show(secs.length-1,true)}});
+try{matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change',()=>startDemo())}catch(e){}
+show(0,false);
+})();
 </script></body></html>
