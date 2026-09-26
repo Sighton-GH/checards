@@ -156,6 +156,13 @@ select{width:100%;background:var(--surface);color:var(--text);border:1px solid v
 .sheet .sub{font-size:12px;color:var(--muted);margin-bottom:12px}
 .draft-cards{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;max-width:430px;max-height:52vh;overflow-y:auto}
 
+.dlg-scrim{position:fixed;inset:0;z-index:30;background:rgba(23,38,58,.55);display:flex;align-items:center;justify-content:center;padding:16px}
+.dlg{background:var(--panel);border:1px solid var(--line);border-radius:14px;max-width:560px;width:100%;max-height:calc(100dvh - 48px);display:flex;flex-direction:column;box-shadow:0 14px 44px rgba(10,30,55,.35)}
+.dlg-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px 6px}
+.dlg-head h2{margin:0;font-size:17px}
+.dlg-x{font-size:18px;line-height:1;padding:6px 10px}
+.dlg-body{padding:0 16px 14px;overflow-y:auto}
+@media(max-width:560px){.dlg-scrim{padding:0;align-items:flex-end}.dlg{max-width:none;border-radius:14px 14px 0 0;max-height:92dvh}}
 /* --- interactive help guide (owns #pane-help) --- */
 .guide{--msq:44px}
 @media(max-width:480px){.guide{--msq:37px}}
@@ -224,7 +231,6 @@ select{width:100%;background:var(--surface);color:var(--text);border:1px solid v
     <div class="tabs" role="tablist">
       <button class="tab-btn active" data-tab="moves" type="button" role="tab" id="tab-moves" aria-selected="true" aria-controls="pane-moves">Moves</button>
       <button class="tab-btn" data-tab="newgame" type="button" role="tab" id="tab-newgame" aria-selected="false" aria-controls="pane-newgame" tabindex="-1">New game</button>
-      <button class="tab-btn" data-tab="help" type="button" role="tab" id="tab-help" aria-selected="false" aria-controls="pane-help" tabindex="-1">Help</button>
     </div>
     <div class="tab-pane active" id="pane-moves" role="tabpanel" aria-labelledby="tab-moves">
       <div class="moves" id="log" role="log" aria-label="Move list"><div class="muted" id="logEmpty">Moves will appear here once the game starts.</div></div>
@@ -247,7 +253,13 @@ select{width:100%;background:var(--surface);color:var(--text);border:1px solid v
         <p class="muted">Starts a fresh game. Finished games stay saved in this browser.</p>
       </form>
     </div>
-    <div class="tab-pane help" id="pane-help" role="tabpanel" aria-labelledby="tab-help">
+    
+  </aside>
+</main>
+<div class="dlg-scrim hidden" id="helpScrim">
+  <div class="dlg" role="dialog" aria-modal="true" aria-labelledby="helpTitle" id="pane-help">
+    <div class="dlg-head"><h2 id="helpTitle">How to play</h2><button class="btn ghost dlg-x" id="helpClose" type="button" aria-label="Close help">&times;</button></div>
+    <div class="dlg-body">
       <div class="guide" id="helpGuide">
         <ol class="g-steps" id="gDots" aria-label="Guide sections"></ol>
         <div class="g-body" id="gBody">
@@ -309,10 +321,10 @@ select{width:100%;background:var(--surface);color:var(--text);border:1px solid v
           <span class="g-count" id="gCount">1 / 6</span>
           <button class="btn primary" id="gNext" type="button">Next &rarr;</button>
         </div>
-      </div>
-    </div>
-  </aside>
-</main>
+      </div></div>
+  </div>
+</div>
+
 <script>/*ENGINE*/</script>
 <script>
 let M,S,sel=null,gameId=null,aiBusy=false,pendingDest=null,lastMove=null,lastCombat=[],logSeen=0,focusSq=null;
@@ -547,6 +559,7 @@ $('board').addEventListener('keydown',e=>{
   if(t){t.tabIndex=0;t.focus()}});
 document.addEventListener('keydown',e=>{
   if(e.key!='Escape')return;
+  if(!$('helpScrim').classList.contains('hidden')){closeHelp();return}
   if(!$('chooser').classList.contains('hidden')){pendingDest=null;render()}});
 function trapTab(dlg,e){
   if(e.key!='Tab')return;
@@ -557,7 +570,12 @@ function trapTab(dlg,e){
 $('draft').addEventListener('keydown',e=>trapTab($('draft'),e));
 $('chooser').addEventListener('keydown',e=>trapTab($('chooser'),e));
 document.querySelectorAll('.tab-btn').forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
-$('helpBtn').onclick=()=>{showTab('help');if(innerWidth<=920)$('sidePanel').scrollIntoView({behavior:reducedMotion()?'auto':'smooth'})};
+function openHelp(){$('helpScrim').classList.remove('hidden');$('helpClose').focus()}
+function closeHelp(){$('helpScrim').classList.add('hidden');$('helpBtn').focus()}
+$('helpBtn').onclick=openHelp;
+$('helpClose').onclick=closeHelp;
+$('helpScrim').addEventListener('click',e=>{if(e.target===$('helpScrim'))closeHelp()});
+$('helpScrim').addEventListener('keydown',e=>trapTab($('helpScrim'),e));
 $('newgTop').onclick=()=>{showTab('newgame');if(innerWidth<=920)$('sidePanel').scrollIntoView({behavior:reducedMotion()?'auto':'smooth'})};
 $('newg').onclick=()=>{showTab('moves');newGame();if(innerWidth<=920)$('boardWrap').scrollIntoView({behavior:reducedMotion()?'auto':'smooth'})};
 $('dl').onclick=()=>download('checards-game-'+gameId+'.json',JSON.parse(M.UTF8ToString(M._cg_log())));
@@ -572,7 +590,7 @@ function autotest(n){let k=0;const tick=()=>{S=st();if(k++>=n||S.phase=='over'){
 
 loadPrefs();
 CheckardsEngine().then(m=>{M=m;newGame();
-  try{if(!localStorage.getItem('checardsHelpSeen')){showTab('help');localStorage.setItem('checardsHelpSeen','1')}}catch(e){}
+  try{if(!localStorage.getItem('checardsHelpSeen')){openHelp();localStorage.setItem('checardsHelpSeen','1')}}catch(e){}
   const q=new URLSearchParams(location.search);if(q.get('autotest')){aiBusy=true;autotest(+q.get('autotest'))}});
 </script>
 <script>
