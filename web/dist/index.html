@@ -415,6 +415,7 @@ function sqLabel(x,y,cards,cl){
 
 function renderBars(){
   const h=S.human,ai=h<0?1:1-h;
+  const hb=h<0?0:h;
   const D=deadCards();
   const modelShort=onlineGame?'Opponent':$('model').selectedOptions[0].textContent.split('(')[0].trim();
   $('barTop').innerHTML=
@@ -424,11 +425,11 @@ function renderBars(){
     `<div class="dead" title="Cards the opponent has lost">${D[ai].map(n=>faceHtml(n,'xs',ai)).join('')}</div>`+
     `<div class="pile" title="Opponent draw pile">${backHtml(ai,'xs')}<span>&times;${S.draw[ai]}</span></div>`;
   $('barBottom').innerHTML=
-    `<span class="avatar ${h==0?'fr':'fb'}">${h==0?'\u2665':'\u2660'}</span>`+
-    `<div class="who"><div class="nm">You</div><div class="sub">${h===-1?'Watching':h==0?'Red - moves first':'Black - moves second'}</div></div>`+
+    `<span class="avatar ${hb==0?'fr':'fb'}">${hb==0?'\u2665':'\u2660'}</span>`+
+    `<div class="who"><div class="nm">${h===-1?'Red':'You'}</div><div class="sub">${h===-1?'Watching':h==0?'Red - moves first':'Black - moves second'}</div></div>`+
     `<div class="sp"></div>`+
-    `<div class="dead" title="Cards you have lost">${D[h].map(n=>faceHtml(n,'xs',h)).join('')}</div>`+
-    `<div class="pile" title="Your draw pile">${backHtml(h,'xs')}<span>&times;${S.draw[h]}</span></div>`}
+    `<div class="dead" title="Cards this side has lost">${D[hb].map(n=>faceHtml(n,'xs',hb)).join('')}</div>`+
+    `<div class="pile" title="Draw pile">${backHtml(hb,'xs')}<span>&times;${S.draw[hb]}</span></div>`}
 
 function renderScout(){
   const el=$('scout');

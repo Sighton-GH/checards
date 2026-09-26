@@ -96,7 +96,8 @@ function select(session, fallbackCode, desiredRole) {
   const room = session?.room || session?.code || fallbackCode;
   const role = session?.role || session?.side || desiredRole;
   if (!codeRe.test(String(room || ''))) throw new Error('Room response had no valid code.');
-  window.dispatchEvent(new CustomEvent('checards:room-selected', {detail:{room, role, token:session?.token, session}}));
+  // createRoom/joinRoom/spectate return a result wrapper; hand the board glue the real RoomSession.
+  window.dispatchEvent(new CustomEvent('checards:room-selected', {detail:{room, role, token:session?.token, session: session?.session || session}}));
   close();
 }
 async function act(button, work) {
