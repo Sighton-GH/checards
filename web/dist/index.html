@@ -56,6 +56,7 @@ body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-a
 .logo{display:inline-block;margin-right:9px;border-radius:6px;flex:0 0 auto}
 .top-actions{display:flex;gap:8px}
 #themeBtn{padding:8px 10px}
+.btn[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
 #themeBtn svg{display:block;width:17px;height:17px;fill:currentColor}
 
 .layout{display:flex;gap:22px;max-width:1080px;margin:0 auto;padding:18px 16px 40px;align-items:flex-start}
@@ -278,6 +279,7 @@ select{width:100%;background:var(--surface);color:var(--text);border:1px solid v
 </svg>Checards</div>
   <div class="top-actions">
     <button class="btn ghost" id="themeBtn" type="button" aria-pressed="false" aria-label="Switch to dark mode" title="Dark mode"><span id="themeIcon" aria-hidden="true"></span></button>
+      <button class="btn ghost" id="music" type="button" aria-pressed="false" title="Music is off until you turn it on">Music: off</button>
     <button class="btn ghost" id="helpBtn" type="button">How to play</button>
     <button class="btn primary" id="newgTop" type="button">New game</button>
   </div>
@@ -399,6 +401,33 @@ let M,S,sel=null,gameId=null,aiBusy=false,pendingDest=null,lastMove=null,lastCom
 const reducedMotion=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
 const RES={1:'Red wins',2:'Black wins',3:'Draw - mutual destruction',4:'Draw - no combat for a long stretch',5:'Stopped - move limit reached'};
 const $=id=>document.getElementById(id);
+// Original-game music. Source-page URLs are relative; build.sh embeds the same audio into the single-file release.
+const AUDIO_FILES=/*AUDIO_FILES*/{"menu":["audio/checards-menu.ogg","audio/checards-menu.mp3"],"game":["audio/checards-game.ogg","audio/checards-game.mp3"],"win":["audio/checards-win.ogg","audio/checards-win.mp3"],"lose":["audio/checards-lose.ogg","audio/checards-lose.mp3"]};
+const musicTracks={};let musicOn=false,musicPhase=null,musicResult=null,currentMusic=null;
+for(const [key,[ogg,mp3]] of Object.entries(AUDIO_FILES)){
+  const a=new Audio();a.preload='none';a.loop=key==='menu'||key==='game';a.volume=key==='menu'?.24:key==='game'?.19:.33;
+  const sourceOgg=document.createElement('source');sourceOgg.src=ogg;sourceOgg.type='audio/ogg';a.appendChild(sourceOgg);
+  const sourceMp3=document.createElement('source');sourceMp3.src=mp3;sourceMp3.type='audio/mpeg';a.appendChild(sourceMp3);
+  musicTracks[key]=a;
+}
+function playMusic(key){
+  if(currentMusic===key)return;
+  for(const track of Object.values(musicTracks)){track.pause();track.currentTime=0}
+  currentMusic=key;if(!key||!musicOn)return;
+  // Browsers may reject autoplay: only a click on Music starts playback.
+  musicTracks[key].play().catch(()=>{currentMusic=null});
+}
+function updateMusic(){
+  if(!musicOn){playMusic(null);return}
+  let key=musicPhase==='play'?'game':'menu';
+  // Spectators (human=-1) get no result jingle.
+  if(musicPhase==='over')key=S.human<0?null:(musicResult===1+S.human?'win':(musicResult===1+(1-S.human)?'lose':null));
+  playMusic(key);
+}
+function setMusicState(phase,result){
+  if(musicPhase===phase&&(phase!=='over'||musicResult===result))return;
+  musicPhase=phase;musicResult=result;updateMusic();
+}
 const st=()=>onlineGame?onlineView:JSON.parse(M.UTF8ToString(M._cg_state()));
 const cell=(x,y)=>S.board[x*7+y];
 const GLYPH={D:'\u2666',H:'\u2665',C:'\u2663',S:'\u2660'};
@@ -689,7 +718,7 @@ function renderDraft(){
   const first=dc.querySelector('.cbtn');if(first)first.focus()}
 
 function render(){
-  S=st();if(!S)return;setSq();
+  S=st();if(!S)return;setSq();setMusicState(S.phase,S.result);
   const refocus=focusSq&&!pendingDest&&S.phase!='setup_draft'&&$('board').contains(document.activeElement);
   renderBoard();renderBars();renderStatus();renderActions();renderChooser();renderDraft();renderScout();
   if(refocus){const t=document.querySelector(`[data-x="${focusSq[0]}"][data-y="${focusSq[1]}"]`);if(t)t.focus()}}
@@ -799,6 +828,11 @@ $('helpScrim').addEventListener('click',e=>{if(e.target===$('helpScrim'))closeHe
 $('helpScrim').addEventListener('keydown',e=>trapTab($('helpScrim'),e));
 $('newgTop').onclick=()=>{showTab('newgame');if(innerWidth<=920)$('sidePanel').scrollIntoView({behavior:reducedMotion()?'auto':'smooth'})};
 $('newg').onclick=()=>{showTab('moves');newGame();if(innerWidth<=920)$('boardWrap').scrollIntoView({behavior:reducedMotion()?'auto':'smooth'})};
+$('music').onclick=()=>{
+  musicOn=!musicOn;const b=$('music');b.textContent='Music: '+(musicOn?'on':'off');b.setAttribute('aria-pressed',String(musicOn));
+  // Reset when enabling so the selected loop starts at the beginning.
+  if(musicOn){currentMusic=null;updateMusic()}else playMusic(null);
+};
 $('dl').onclick=()=>{if(onlineGame)return;download('checards-game-'+gameId+'.json',JSON.parse(M.UTF8ToString(M._cg_log())))};
 $('dlall').onclick=()=>download('checards-all-games.json',JSON.parse(localStorage.getItem('checardsGames')||'{}'));
 window.addEventListener('resize',setSq);

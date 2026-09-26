@@ -9,8 +9,14 @@ em++ -std=c++17 -O3 -DNDEBUG -Iengine/include engine/src/board.cpp engine/src/co
   -sEXPORTED_FUNCTIONS=_cg_new,_cg_place,_cg_draft,_cg_human_act,_cg_ai_step,_cg_state,_cg_log -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,UTF8ToString \
   --embed-file web/models@/models
 python3 - <<'PY'
-import re
+import re, base64, json
 h=open('web/index.html').read();e=open('web/dist/engine.js').read()
+audio={}
+for key in ('menu','game','win','lose'):
+    audio[key]=['data:audio/'+mime+';base64,'+base64.b64encode(open('web/audio/checards-'+key+'.'+ext,'rb').read()).decode('ascii')
+                for ext,mime in (('ogg','ogg'),('mp3','mpeg'))]
+astart=h.index('/*AUDIO_FILES*/');aend=h.index(';',astart)
+h=h[:astart]+json.dumps(audio,separators=(',',':'))+h[aend:]
 h=h.replace('/*ENGINE*/',e,1)
 # Inline the multiplayer assets so the single-file dist stays self-contained.
 css=open('web/lobby.css').read()
@@ -33,6 +39,7 @@ PY
 # The hosted build also serves the multiplayer assets as separate files;
 # its index.html loads engine.js from the same folder instead of inlining it.
 cp web/lobby.js web/lobby.css web/net.js web/dist/
+rm -rf web/dist/audio && cp -r web/audio web/dist/audio
 python3 - <<'PY'
 h=open('web/index.html').read()
 h=h.replace('<script>/*ENGINE*/</script>','<script src="./engine.js"></script>',1)
