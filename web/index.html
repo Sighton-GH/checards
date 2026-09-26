@@ -51,11 +51,11 @@ var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('co
 }
 body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 
-.topbar{display:flex;align-items:center;justify-content:space-between;padding:10px 18px;background:var(--panel);border-bottom:1px solid var(--line)}
+.topbar{position:relative;display:flex;align-items:center;justify-content:space-between;padding:10px 18px;background:var(--panel);border-bottom:1px solid var(--line)}
 .brand{display:flex;align-items:center;font-size:19px;font-weight:700;letter-spacing:.4px}
 .logo{display:inline-block;margin-right:9px;border-radius:6px;flex:0 0 auto}
 .top-actions{display:flex;gap:8px}
-#themeBtn{padding:8px 10px}
+#themeBtn{position:absolute;right:11px;top:10px;display:grid;place-items:center;width:36px;height:36px;padding:0;min-width:0;min-height:0}
 .btn[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
 #themeBtn svg{display:block;width:17px;height:17px;fill:currentColor}
 
@@ -71,7 +71,11 @@ body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-a
   .side{position:static;max-width:none;width:100%;flex:none}
 }
 
-.pbar{display:flex;align-items:center;gap:10px;padding:4px 6px;min-height:40px}
+.pbar{display:flex;align-items:center;gap:10px;padding:4px 6px;min-height:40px;position:relative;border:2px solid transparent;border-radius:10px;transition:background .2s,border-color .2s}
+.pbar.turn-active{border-color:var(--accent);background:var(--surface);box-shadow:0 0 0 2px var(--panel),0 2px 12px var(--board-sh)}
+.turn-badge{display:inline-block;background:var(--accent);color:#fff;padding:3px 8px;border-radius:5px;font-size:11px;font-weight:800;letter-spacing:.04em;white-space:nowrap}
+.pbar.turn-active .who .nm{color:var(--accent-d)}
+:root[data-theme="dark"] .pbar.turn-active .who .nm{color:var(--text)}
 .avatar{width:34px;height:34px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:17px;color:#fff;flex:0 0 auto}
 .avatar.fr{background:var(--red)} .avatar.fb{background:var(--navy)}
 .who{min-width:0}
@@ -97,10 +101,12 @@ body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-a
   .board-col>.pbar .sp{display:none}
   .board-col>.pbar .dead{max-width:100%;justify-content:center}
   .board-col>.pbar .pile{justify-content:center}
+  .board-col>.pbar .turn-badge{font-size:10px;padding:3px 5px}
   .side .topbar{display:flex;flex-direction:column;align-items:stretch;gap:10px;border:1px solid var(--line);border-radius:10px;padding:11px;margin-bottom:10px}
   .side .topbar .top-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
   .side .topbar .top-actions .btn{min-width:0;padding:8px 5px;font-size:12px}
-  .side .topbar .brand{font-size:19px}
+  .side .topbar .brand{font-size:19px;margin-right:43px}
+  .side .topbar #newgTop{grid-column:1 / -1}
 }
 .board{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));grid-template-rows:repeat(7,minmax(0,1fr));width:100%;aspect-ratio:1;border-radius:8px;overflow:hidden;box-shadow:0 4px 18px var(--board-sh)}
 .sq{position:relative;display:flex;align-items:center;justify-content:center;min-width:0;min-height:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
@@ -122,7 +128,7 @@ body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-a
   .brand{font-size:17px}
   .top-actions{width:100%;justify-content:space-between;gap:4px}
   .top-actions .btn{font-size:11px;padding:7px 5px;min-width:0;min-height:36px}
-  #themeBtn{padding:7px 9px}
+  #themeBtn{right:10px;top:8px}
 }
 @media(max-width:920px){.scrim{position:fixed;border-radius:0;z-index:20}.side{min-width:0}}
 @media(orientation:landscape) and (max-height:540px){
@@ -194,6 +200,10 @@ body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-a
 .sq.drop-target{box-shadow:inset 0 0 0 4px var(--accent)}
 .status{display:flex;align-items:center;gap:9px;margin-top:12px;padding:10px 14px;background:var(--panel);border:1px solid var(--line);border-radius:9px;font-size:14px;min-height:44px}
 .status.over{border-color:var(--gold);background:var(--over-bg)}
+.status.my-turn{border:2px solid var(--accent);background:var(--surface);box-shadow:0 3px 14px var(--board-sh)}
+.status .turn-title{display:block;color:var(--accent-d);font-size:18px;line-height:1.2;font-weight:800;margin-bottom:5px}
+:root[data-theme="dark"] .status .turn-title{color:var(--text)}
+.status .turn-detail{display:block;font-weight:650;margin-bottom:3px}
 .tdot{width:9px;height:9px;border-radius:50%;background:var(--accent);flex:0 0 auto;box-shadow:0 0 6px var(--accent)}
 .spin{width:13px;height:13px;border:2px solid rgba(32,90,156,.2);border-top-color:var(--accent);border-radius:50%;animation:rot .8s linear infinite;flex:0 0 auto}
 @keyframes rot{to{transform:rotate(360deg)}}
@@ -317,9 +327,9 @@ select{width:100%;background:var(--surface);color:var(--text);border:1px solid v
   <path d="m20 14 4 5-4 5-4-5Z" fill="#D8404D"/>
   <path d="m44 40 4 5-4 5-4-5Z" fill="#D8404D"/>
 </svg>Checards</div>
+  <button class="btn ghost" id="themeBtn" type="button" aria-pressed="false" aria-label="Switch to dark mode" title="Dark mode"><span id="themeIcon" aria-hidden="true"></span></button>
   <div class="top-actions">
-    <button class="btn ghost" id="themeBtn" type="button" aria-pressed="false" aria-label="Switch to dark mode" title="Dark mode"><span id="themeIcon" aria-hidden="true"></span></button>
-      <button class="btn ghost" id="music" type="button" aria-pressed="false" title="Music is off until you turn it on">Music: off</button>
+    <button class="btn ghost" id="music" type="button" aria-pressed="false" title="Music is off until you turn it on">Music: off</button>
     <button class="btn ghost" id="helpBtn" type="button">How to play</button>
     <button class="btn primary" id="newgTop" type="button">New game</button>
   </div>
@@ -701,7 +711,15 @@ function renderBars(){
     `<div class="who"><div class="nm">${h===-1?'Red':'You'}</div><div class="sub">${h===-1?'Watching':h==0?'Red - moves first':'Black - moves second'}</div></div>`+
     `<div class="sp"></div>`+
     `<div class="dead" title="Cards this side has lost">${D[hb].map(n=>faceHtml(n,'xs',hb)).join('')}</div>`+
-    `<div class="pile" title="Draw pile">${backHtml(hb,'xs')}<span>&times;${S.draw[hb]}</span></div>`}
+    `<div class="pile" title="Draw pile">${backHtml(hb,'xs')}<span>&times;${S.draw[hb]}</span></div>`;
+  const playing=S.phase=='play'&&onlineConnected&&!onlinePending;
+  const myTurn=playing&&S.human>=0&&S.mover==S.human;
+  const theirTurn=playing&&S.human>=0&&S.mover!=S.human;
+  $('barBottom').classList.toggle('turn-active',myTurn);
+  $('barTop').classList.toggle('turn-active',theirTurn);
+  if(myTurn)$('barBottom').insertAdjacentHTML('beforeend','<span class="turn-badge">YOUR TURN</span>');
+  if(theirTurn)$('barTop').insertAdjacentHTML('beforeend','<span class="turn-badge">THEIR TURN</span>')}
+
 
 function renderScout(){
   const el=$('scout');
@@ -727,11 +745,12 @@ function renderStatus(){
   else if(S.phase=='play'){const mine=S.mover==S.human;
     if(mine){const spawnOk=S.legal.some(a=>a.spawn);
       const hint=sel?' Tap a highlighted square to move it.':(spawnOk?' Tap one of your cards, then a highlighted square - or tap a glowing back-row square to draw a card (ends your turn).':' Tap one of your cards, then tap a highlighted square to move it.');
-      h=`<span class="tdot"></span><span><b>Your turn</b> - ${S.movesRemaining} of 3 moves left.${hint}</span>`}
-    else h=`<span class="spin"></span><span>${onlineGame?'Opponent is playing':'AI is thinking&hellip;'}</span>`}
+      h=`<span><strong class="turn-title">Your turn</strong><span class="turn-detail">${S.movesRemaining} of 3 moves left</span>${hint.trim()}</span>`}
+    else h=`<span class="spin"></span><span><strong>Opponent's turn</strong> - ${onlineGame?'waiting for their move':'AI is thinking&hellip;'}</span>`}
   else if(over){h=`<span><b>Game over - ${RES[S.result]}</b></span>`}
   $('status').innerHTML=h;
-  $('status').classList.toggle('over',over)}
+  $('status').classList.toggle('over',over);
+  $('status').classList.toggle('my-turn',S.phase=='play'&&S.mover==S.human&&S.human>=0&&onlineConnected&&!onlinePending)}
 
 function renderActions(){
   const A=$('actions');A.innerHTML='';
