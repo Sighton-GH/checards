@@ -60,14 +60,14 @@ body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-a
 #themeBtn svg{display:block;width:17px;height:17px;fill:currentColor}
 
 /* Let the board take the main viewport rather than reserving a wide empty gutter. */
-.layout{display:flex;gap:22px;max-width:1600px;margin:0 auto;padding:18px 20px 24px;align-items:flex-start}
+.layout{display:flex;gap:22px;max-width:1600px;margin:0 auto;padding:10px 16px 20px;align-items:flex-start}
 .board-col{flex:1 1 0;min-width:0}
 .side{flex:0 0 clamp(290px,26vw,360px);min-width:0;position:sticky;top:16px}
 .side .status{margin:0 0 12px;align-items:flex-start}
 .side .actions{margin:0 0 12px}
 @media(max-width:920px){
   .layout{flex-direction:column;padding:12px 10px 32px;gap:14px}
-  .board-col{flex:none;width:100%}
+  .board-col{display:block;flex:none;width:100%}
   .side{position:static;max-width:none;width:100%;flex:none}
 }
 
@@ -85,10 +85,22 @@ body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-a
 .board-wrap{position:relative;width:100%;max-width:900px;margin:0 auto}
 @media(min-width:921px){
   /* The hand must remain in view with the board for drag-to-place to work. */
-  .board-wrap{max-width:min(100%,900px,calc(100dvh - 140px))}
-  .layout:has(.setup-hand:not(.hidden)) .board-wrap{max-width:min(100%,900px,calc(100dvh - 215px))}
-  .board-col>.pbar{display:none}
-  .side>.pbar{padding:3px 0}
+  .board-wrap{max-width:min(100%,900px,calc(100dvh - 40px))}
+  .layout:has(.setup-hand:not(.hidden)) .board-wrap{max-width:min(100%,900px,calc(100dvh - 145px))}
+  .board-col{display:grid;grid-template-columns:minmax(86px,1fr) minmax(0,900px) minmax(86px,1fr);grid-template-areas:"opp board you" ". hand .";align-items:center;column-gap:8px}
+  #barTop{grid-area:opp}
+  #barBottom{grid-area:you}
+  #boardWrap{grid-area:board}
+  #setupHand{grid-area:hand;width:100%}
+  .board-col>.pbar{flex-direction:column;align-items:center;justify-content:center;text-align:center;align-self:center;gap:7px;min-width:0}
+  .board-col>.pbar .who .nm,.board-col>.pbar .who .sub{white-space:normal}
+  .board-col>.pbar .sp{display:none}
+  .board-col>.pbar .dead{max-width:100%;justify-content:center}
+  .board-col>.pbar .pile{justify-content:center}
+  .side .topbar{display:flex;flex-direction:column;align-items:stretch;gap:10px;border:1px solid var(--line);border-radius:10px;padding:11px;margin-bottom:10px}
+  .side .topbar .top-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+  .side .topbar .top-actions .btn{min-width:0;padding:8px 5px;font-size:12px}
+  .side .topbar .brand{font-size:19px}
 }
 .board{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));grid-template-rows:repeat(7,minmax(0,1fr));width:100%;aspect-ratio:1;border-radius:8px;overflow:hidden;box-shadow:0 4px 18px var(--board-sh)}
 .sq{position:relative;display:flex;align-items:center;justify-content:center;min-width:0;min-height:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
@@ -115,7 +127,7 @@ body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-a
 @media(max-width:920px){.scrim{position:fixed;border-radius:0;z-index:20}.side{min-width:0}}
 @media(orientation:landscape) and (max-height:540px){
   .layout{flex-direction:row;align-items:flex-start}
-  .board-col{flex:0 1 auto}
+  .board-col{display:block;flex:0 1 auto}
   .board-wrap{max-width:min(100%,calc(100dvh - 175px))}
   .side{position:static;flex:1 1 240px;min-width:230px;max-width:none}
 }
@@ -294,7 +306,7 @@ select{width:100%;background:var(--surface);color:var(--text);border:1px solid v
 .g-nav .btn[disabled]{opacity:.45;cursor:default}
 </style></head>
 <body>
-<header class="topbar">
+<header class="topbar" id="topbar">
   <div class="brand"><svg class="logo" width="26" height="26" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Checards ace square logo">
   <rect x="2" y="2" width="60" height="60" rx="13" fill="#174E9A"/>
   <path d="M2 15A13 13 0 0 1 15 2h17v30H2Z" fill="#2368B7"/>
@@ -324,7 +336,7 @@ select{width:100%;background:var(--surface);color:var(--text);border:1px solid v
     <div class="setup-hand hidden" id="setupHand" aria-label="Your setup cards"></div>
   </section>
   <aside class="side" id="sidePanel">
-    <div class="sidebar-players" id="sidebarPlayers"></div>
+    <div class="sidebar-header" id="sidebarHeader"></div>
     <div class="status" id="status" aria-live="polite">Loading engine&hellip;</div>
     <div class="actions" id="actions"></div>
     <div class="tabs" role="tablist">
@@ -623,9 +635,11 @@ function deadCards(){if(onlineGame)return [[],[]];const D=[[],[]];let L=[];try{L
   return D}
 function positionPlayerBars(){
   const desktop=innerWidth>920&&!(innerHeight<=540&&matchMedia('(orientation: landscape)').matches);
-  const target=desktop?$('sidebarPlayers'):$('boardWrap').parentNode;
-  if(desktop){target.append($('barTop'),$('barBottom'))}
-  else if($('barTop').parentNode!==target){target.insertBefore($('barTop'),$('boardWrap'));target.insertBefore($('barBottom'),$('setupHand'))}
+  const header=desktop?$('sidebarHeader'):document.body;
+  if(desktop){if($('topbar').parentNode!==header)header.appendChild($('topbar'))}
+  else if($('topbar').parentNode!==header)header.insertBefore($('topbar'),document.querySelector('main'));
+  const target=$('boardWrap').parentNode;
+  if($('barTop').parentNode!==target){target.insertBefore($('barTop'),$('boardWrap'));target.insertBefore($('barBottom'),$('setupHand'))}
 }
 function setSq(){const w=$('board').clientWidth;if(w)document.documentElement.style.setProperty('--sq',(w/7)+'px')}
 
