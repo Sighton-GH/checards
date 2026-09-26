@@ -87,12 +87,12 @@ body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-a
   flex:0 0 auto;color:#26262e}
 .pc.rd{color:#c02830}
 .pc.jk-r{color:#c02830} .pc.jk-b{color:#33465e}
-.pc .ci{position:absolute;display:flex;flex-direction:column;align-items:center;width:.62em;line-height:.9;z-index:1}
-.pc .ci.tl{top:.16em;left:.1em}
-.pc .ci.br{bottom:.16em;right:.1em;transform:rotate(180deg)}
-.pc .ci .rk{font-size:.46em;font-weight:800;letter-spacing:-.02em}
-.pc .ci .rk.ten{font-size:.38em}
-.pc .ci .su{display:block;width:.34em;height:.34em;margin-top:.05em}
+.pc .ci{position:absolute;display:flex;flex-direction:column;align-items:center;width:.5em;line-height:.9;z-index:1}
+.pc .ci.tl{top:.13em;left:.07em}
+.pc .ci.br{bottom:.13em;right:.07em;transform:rotate(180deg)}
+.pc .ci .rk{font-size:.38em;font-weight:800;letter-spacing:-.02em}
+.pc .ci .rk.ten{font-size:.31em}
+.pc .ci .su{display:block;width:.3em;height:.3em;margin-top:.04em}
 .pc .ci .su svg{display:block;width:100%;height:100%;fill:currentColor}
 .pc .art{position:absolute;inset:0;width:100%;height:100%;fill:currentColor}
 .pc>.rk{display:block;font-size:.95em;font-weight:800;padding-top:.5em}
@@ -279,54 +279,136 @@ const SUIT={
   S:{n:'spades',p:'<path d="M50 3C34 20 8 39 8 59c0 14 10 24 22 24 7 0 13-3 17-9-1 10-4 18-9 22h24c-5-4-8-12-9-22 4 6 10 9 17 9 12 0 22-10 22-24C92 39 66 20 50 3Z"/>'},
   C:{n:'clubs',p:'<circle cx="50" cy="24" r="19"/><circle cx="27" cy="57" r="19"/><circle cx="73" cy="57" r="19"/><path d="M50 52c1 15-1 29-9 42h18c-8-13-10-27-9-42Z"/>'}};
 const STAR='<path d="M50 6 61.5 37.5 94.5 38 68 58 77 90.5 50 71.5 23 90.5 32 58 5.5 38 38.5 37.5Z"/>';
-const CD={G:'#dfa838',R:'#c0392b',B:'#3a5a94',D:'#2c2a30',F:'#f4e7cf',HR:'#8a5a2a',GR:'#3f7a3a'};
+const CD={G:'#e3ae35',R:'#c12e2b',B:'#2f4e92',D:'#211f26',F:'#f2d2a4',E:'#f8f3e4',HK:'#8f8a80',HQ:'#4a3c31',HJ:'#d9a83e',LP:'#b03a30',SV:'#e4e7ec',GR:'#3f7a3a',BR:'#7a5230'};
 function pipAt(su,cx,cy,w,inv){return `<svg x="${cx-w/2}" y="${cy-w/2}" width="${w}" height="${w}" viewBox="0 0 100 100"${inv?` transform="rotate(180 ${cx} ${cy})"`:''}>${SUIT[su].p}</svg>`}
 function pipArt(rk,su){
-  if(rk=='A')return pipAt(su,50,70,50);
-  let s='';const rows=[[16,0],[48,0],[92,1],[124,1]];
-  for(const cx of [28,72])for(const r of rows)s+=pipAt(su,cx,r[0],18,r[1]);
-  if(rk=='9')s+=pipAt(su,50,70,22,0);
-  else if(rk=='10')s+=pipAt(su,50,36,22,0)+pipAt(su,50,104,22,1);
+  if(rk=='A'){
+    if(su=='S')return pipAt(su,50,70,46,0)+
+      `<svg x="29.5" y="49.5" width="41" height="41" viewBox="0 0 100 100" fill="none" stroke="#f6f2e6" stroke-width="4.5">${SUIT.S.p}</svg>`+
+      `<path d="M50 62.5 57.5 71.5 50 80.5 42.5 71.5Z" fill="${CD.G}" stroke="${CD.D}" stroke-width="1"/>`;
+    return pipAt(su,50,70,44,0)}
+  let s='';
+  if(rk=='10'){const rows=[[18,0],[54,0],[86,1],[122,1]];
+    for(const cx of [25,75])for(const r of rows)s+=pipAt(su,cx,r[0],21,r[1]);
+    return s+pipAt(su,50,40,21,0)+pipAt(su,50,100,21,1)}
+  const rows=[[18,0],[52,0],[88,1],[122,1]];
+  for(const cx of [25,75])for(const r of rows)s+=pipAt(su,cx,r[0],21,r[1]);
+  s+=pipAt(su,50,70,21,0);
   return s}
 function courtArt(rk,su){
-  const {G,R,B,D,F,HR,GR}=CD;
+  const {G,R,B,D,F,E,HK,HQ,HJ,LP,SV,GR,BR}=CD;
   const robe=rk=='K'?R:rk=='Q'?G:B;
+  const inner=rk=='K'?B:rk=='Q'?R:G;
+  const hairC=rk=='K'?HK:rk=='Q'?HQ:HJ;
   const hat=rk=='K'
-    ?`<path d="M35 33 35 21 41 28.5 50 16 59 28.5 65 21 65 33Z" fill="${G}" stroke="${D}" stroke-width="1.5"/><circle cx="35" cy="19" r="2.3" fill="${G}" stroke="${D}" stroke-width="1"/><circle cx="50" cy="13.5" r="2.3" fill="${G}" stroke="${D}" stroke-width="1"/><circle cx="65" cy="19" r="2.3" fill="${G}" stroke="${D}" stroke-width="1"/><rect x="33.5" y="33" width="33" height="4" rx="1.5" fill="${G}" stroke="${D}" stroke-width="1.2"/>`
+    ?`<path d="M37.5 22 37.5 14 43 18.5 46.5 8.5 50 15.5 53.5 8.5 57 18.5 62.5 14 62.5 22Z" fill="${G}" stroke="${D}" stroke-width="1.3" stroke-linejoin="round"/>`+
+     `<circle cx="46.5" cy="7" r="1.6" fill="${R}" stroke="${D}" stroke-width=".7"/><circle cx="53.5" cy="7" r="1.6" fill="${B}" stroke="${D}" stroke-width=".7"/>`+
+     `<circle cx="41.5" cy="19.5" r="1" fill="${D}"/><circle cx="46.2" cy="19.5" r="1" fill="${D}"/><circle cx="53.8" cy="19.5" r="1" fill="${D}"/><circle cx="58.5" cy="19.5" r="1" fill="${D}"/>`
     :rk=='Q'
-    ?`<path d="M36 37 36 26 64 26 64 37Z" fill="${G}" stroke="${D}" stroke-width="1.4"/><circle cx="39" cy="23" r="2.3" fill="${G}" stroke="${D}" stroke-width="1"/><circle cx="50" cy="19.5" r="2.3" fill="${G}" stroke="${D}" stroke-width="1"/><circle cx="61" cy="23" r="2.3" fill="${G}" stroke="${D}" stroke-width="1"/>`
-    :`<path d="M35 37Q50 20 65 37L65 39 35 39Z" fill="${G}" stroke="${D}" stroke-width="1.4"/><circle cx="50" cy="23.5" r="2.2" fill="${R}" stroke="${D}" stroke-width="1"/>`;
-  const hair=rk=='J'?'' :
-    `<path d="M39 40C36 46 36 54 40 60L43 57C40 52 40 46 42 41Z" fill="${HR}"/><path d="M61 40C64 46 64 54 60 60L57 57C60 52 60 46 58 41Z" fill="${HR}"/>`;
-  const face=`<ellipse cx="50" cy="47.5" rx="9" ry="9.5" fill="${F}" stroke="${D}" stroke-width="1.4"/>`+
-    `<circle cx="46.2" cy="45.5" r="1" fill="${D}"/><circle cx="53.8" cy="45.5" r="1" fill="${D}"/>`+
-    `<path d="M50 46.5 50 50.5" stroke="${D}" stroke-width="1" stroke-linecap="round"/>`+
-    `<path d="M47.8 52.8h4.4" stroke="${D}" stroke-width="1.1" stroke-linecap="round"/>`;
-  const beard=rk=='K'?`<path d="M42.5 52Q50 62 57.5 52L57.5 55Q50 64 42.5 55Z" fill="${HR}"/>`:'';
-  const robes=`<path d="M27 70C29.5 60 38.5 55.5 50 55.5 61.5 55.5 70.5 60 73 70Z" fill="${robe}" stroke="${D}" stroke-width="1.5"/>`+
-    `<path d="M43 55.8 50 62.5 57 55.8 57 59.5 50 66.5 43 59.5Z" fill="${F}" stroke="${D}" stroke-width="1"/>`+
-    pipAt(su,50,64.8,9,0);
+    ?`<path d="M39 22.5 39 16 44 19 50 10.5 56 19 61 16 61 22.5Z" fill="${G}" stroke="${D}" stroke-width="1.2" stroke-linejoin="round"/>`+
+     `<circle cx="50" cy="8.8" r="1.7" fill="${R}" stroke="${D}" stroke-width=".7"/><circle cx="41.8" cy="14.6" r="1.1" fill="${R}" stroke="${D}" stroke-width=".6"/><circle cx="58.2" cy="14.6" r="1.1" fill="${R}" stroke="${D}" stroke-width=".6"/>`
+    :`<path d="M38.5 22.5 38.5 9 61.5 9 61.5 22.5Z" fill="${R}" stroke="${D}" stroke-width="1.3" stroke-linejoin="round"/>`+
+     `<path d="M38.5 15.5h23" stroke="${G}" stroke-width="1.5"/>`+
+     `<path d="M43 9v13M50 9v13M57 9v13" stroke="${D}" stroke-width=".9"/>`+
+     `<circle cx="50" cy="6.6" r="1.9" fill="${G}" stroke="${D}" stroke-width=".8"/>`;
+  const hair=rk=='K'
+    ?`<path d="M38.5 22C35.8 29 35.2 39 37.6 50.5L43.5 50.5C41.2 41 41.4 30 44 23.5Z" fill="${hairC}" stroke="${D}" stroke-width="1"/>`+
+     `<path d="M61.5 22C64.2 29 64.8 39 62.4 50.5L56.5 50.5C58.8 41 58.6 30 56 23.5Z" fill="${hairC}" stroke="${D}" stroke-width="1"/>`+
+     `<path d="M39.3 27.5C38.2 33.5 38.3 41 40 46.5M60.7 27.5C61.8 33.5 61.7 41 60 46.5" stroke="${D}" stroke-width=".7" fill="none"/>`
+    :rk=='Q'
+    ?`<path d="M38.5 22C35.3 29 34.8 40.5 38 51.5 39.8 53.8 41.8 53 42.2 50.3 40.2 42 40.4 30.5 43.5 24Z" fill="${hairC}" stroke="${D}" stroke-width="1"/>`+
+     `<path d="M61.5 22C64.7 29 65.2 40.5 62 51.5 60.2 53.8 58.2 53 57.8 50.3 59.8 42 59.6 30.5 56.5 24Z" fill="${hairC}" stroke="${D}" stroke-width="1"/>`+
+     `<path d="M39.2 28.5C38 35 38.3 42.5 40.5 48.5M60.8 28.5C62 35 61.7 42.5 59.5 48.5" stroke="${G}" stroke-width=".7" fill="none"/>`
+    :`<path d="M39 22C37.2 28 37.2 36.5 39.6 41.5 41.4 43 43.2 41.8 43.4 39.8 41.6 34 41.8 28 44 23.5Z" fill="${hairC}" stroke="${D}" stroke-width="1"/>`+
+     `<path d="M61 22C62.8 28 62.8 36.5 60.4 41.5 58.6 43 56.8 41.8 56.6 39.8 58.4 34 58.2 28 56 23.5Z" fill="${hairC}" stroke="${D}" stroke-width="1"/>`;
+  const face=`<path d="M41.5 23 41.5 33Q41.5 44 50 44.5 58.5 44 58.5 33L58.5 23Z" fill="${F}" stroke="${D}" stroke-width="1.3"/>`+
+    `<path d="M43.6 29.2Q45.7 28 47.7 29" stroke="${D}" stroke-width=".9" fill="none"/>`+
+    `<path d="M52.3 29Q54.3 28 56.4 29.2" stroke="${D}" stroke-width=".9" fill="none"/>`+
+    `<path d="M44 31.7Q45.9 30.4 47.8 31.7 45.9 32.9 44 31.7Z" fill="#fff" stroke="${D}" stroke-width=".7"/>`+
+    `<path d="M52.2 31.7Q54.1 30.4 56 31.7 54.1 32.9 52.2 31.7Z" fill="#fff" stroke="${D}" stroke-width=".7"/>`+
+    `<circle cx="46.3" cy="31.7" r=".85" fill="${D}"/><circle cx="53.7" cy="31.7" r=".85" fill="${D}"/>`+
+    `<path d="M50 33 50 36.6 48.5 37.3" stroke="${D}" stroke-width=".9" fill="none" stroke-linecap="round"/>`;
+  const mouth=rk=='Q'
+    ?`<path d="M46.8 40Q50 42.6 53.2 40 50 41.6 46.8 40Z" fill="${LP}" stroke="${D}" stroke-width=".6"/>`
+    :rk=='J'
+    ?`<path d="M46.8 40.2Q50 41.8 53.2 40.2" stroke="${D}" stroke-width="1" fill="none" stroke-linecap="round"/>`
+    :'';
+  const beard=rk=='K'
+    ?`<path d="M43.4 37Q50 40.6 56.6 37 56.4 43.5 50 45.6 43.6 43.5 43.4 37Z" fill="${hairC}" stroke="${D}" stroke-width=".9"/>`+
+     `<path d="M47.2 41.6Q50 42.8 52.8 41.6" stroke="${D}" stroke-width=".8" fill="none" stroke-linecap="round"/>`
+    :'';
+  const robeBase=`<path d="M43.5 45C32 48.5 21.5 57 16.5 70L83.5 70C78.5 57 68 48.5 56.5 45 53 47 47 47 43.5 45Z" fill="${robe}" stroke="${D}" stroke-width="1.5" stroke-linejoin="round"/>`;
+  const collar=rk=='K'
+    ?`<path d="M41.5 46.5C36 48.5 30.5 52 26.5 56.5L30.5 60C34 55.5 39 52 44 50.3Z" fill="${E}" stroke="${D}" stroke-width=".9"/>`+
+     `<path d="M58.5 46.5C64 48.5 69.5 52 73.5 56.5L69.5 60C66 55.5 61 52 56 50.3Z" fill="${E}" stroke="${D}" stroke-width=".9"/>`+
+     `<path d="M30.5 56.8 31.8 58.4M34.5 54 35.8 55.6M66.5 56.8 65.2 58.4M63.5 54 62.2 55.6" stroke="${D}" stroke-width=".8"/>`
+    :`<path d="M42 46C37 48 32 51 28.5 55L32 58.5C35.5 54.5 40 51.3 44.6 49.6Z" fill="${G}" stroke="${D}" stroke-width=".9"/>`+
+     `<path d="M58 46C63 48 68 51 71.5 55L68 58.5C64.5 54.5 60 51.3 55.4 49.6Z" fill="${G}" stroke="${D}" stroke-width=".9"/>`;
+  const trim=`<path d="M21.5 62.5C26 55.5 31.5 50.5 37.5 47.8" stroke="${G}" stroke-width="1.1" fill="none"/>`+
+    `<path d="M78.5 62.5C74 55.5 68.5 50.5 62.5 47.8" stroke="${G}" stroke-width="1.1" fill="none"/>`;
+  const panel=`<path d="M45 49.5 55 49.5 57.5 70 42.5 70Z" fill="${inner}" stroke="${D}" stroke-width="1.1"/>`+
+    `<path d="M50 53 53 56.5 50 60 47 56.5Z" fill="${G}" stroke="${D}" stroke-width=".7"/>`+
+    `<path d="M50 60.8 52.6 63.8 50 66.8 47.4 63.8Z" fill="${rk=='Q'?G:R}" stroke="${D}" stroke-width=".7"/>`;
+  const hem=`<path d="M17.8 66 82.2 66 83.5 70 16.5 70Z" fill="${G}" stroke="${D}" stroke-width="1"/>`+
+    `<circle cx="26" cy="68" r="1" fill="${D}"/><circle cx="34" cy="68" r="1" fill="${D}"/><circle cx="42" cy="68" r="1" fill="${D}"/><circle cx="58" cy="68" r="1" fill="${D}"/><circle cx="66" cy="68" r="1" fill="${D}"/><circle cx="74" cy="68" r="1" fill="${D}"/>`;
   const prop=rk=='K'
-    ?`<path d="M19 62 14 42" stroke="#9aa2ad" stroke-width="3" stroke-linecap="round"/><path d="M13.6 41.5 12.5 36 17.5 39.5Z" fill="#9aa2ad"/><circle cx="19" cy="63.5" r="2.6" fill="${F}" stroke="${D}" stroke-width="1"/>`
+    ?`<path d="M84.5 7 88 7 87.2 48 85.3 48Z" fill="${SV}" stroke="${D}" stroke-width="1"/>`+
+     `<path d="M86.2 10 86.2 46" stroke="${D}" stroke-width=".6"/>`+
+     `<path d="M80.5 49 92 49 92 52.2 80.5 52.2Z" fill="${G}" stroke="${D}" stroke-width=".9"/>`+
+     `<path d="M84.8 52.2 87.7 52.2 87.7 58 84.8 58Z" fill="${BR}" stroke="${D}" stroke-width=".9"/>`+
+     `<circle cx="86.2" cy="60" r="1.8" fill="${G}" stroke="${D}" stroke-width=".8"/>`+
+     `<path d="M81.5 55.5Q79.8 60 82.3 63 84 64.5 86.5 64.3 89.5 63.5 89.3 59.5 89.2 56 87 55Z" fill="${F}" stroke="${D}" stroke-width="1"/>`+
+     `<path d="M82.5 58.5 88.3 58.2M82.9 60.8 88 60.5" stroke="${D}" stroke-width=".7"/>`
     :rk=='Q'
-    ?`<path d="M77 64 75 51" stroke="${GR}" stroke-width="1.8"/><circle cx="75" cy="47.5" r="2" fill="${R}"/><circle cx="71.8" cy="50" r="2" fill="${R}"/><circle cx="78.2" cy="50" r="2" fill="${R}"/><circle cx="73" cy="53" r="2" fill="${R}"/><circle cx="77" cy="53" r="2" fill="${R}"/><circle cx="75" cy="50.5" r="1.5" fill="${G}"/><circle cx="77.4" cy="65" r="2.4" fill="${F}" stroke="${D}" stroke-width="1"/>`
-    :`<path d="M77 66 74 44" stroke="${HR}" stroke-width="2.4" stroke-linecap="round"/><circle cx="73.7" cy="42" r="2.4" fill="${G}" stroke="${D}" stroke-width="1"/><circle cx="77.4" cy="67.5" r="2.4" fill="${F}" stroke="${D}" stroke-width="1"/>`;
-  const half=hair+face+beard+robes+prop+hat;
+    ?`<path d="M85 62C84.5 54 84.5 46 85.2 38" stroke="${GR}" stroke-width="1.4" fill="none"/>`+
+     `<path d="M85 50C82.5 48.5 81 46 81.2 43.5 83.5 44.5 85 46.5 85.3 49Z" fill="${GR}" stroke="${D}" stroke-width=".6"/>`+
+     `<circle cx="85.4" cy="33.5" r="2.4" fill="${G}" stroke="${D}" stroke-width=".7"/>`+
+     `<circle cx="82.4" cy="30.8" r="2.3" fill="${LP}" stroke="${D}" stroke-width=".7"/><circle cx="88.4" cy="30.8" r="2.3" fill="${LP}" stroke="${D}" stroke-width=".7"/><circle cx="85.4" cy="27.6" r="2.3" fill="${LP}" stroke="${D}" stroke-width=".7"/><circle cx="81.9" cy="35.8" r="2.3" fill="${LP}" stroke="${D}" stroke-width=".7"/><circle cx="88.9" cy="35.8" r="2.3" fill="${LP}" stroke="${D}" stroke-width=".7"/>`+
+     `<path d="M81.5 58.5Q80 63 82.6 65.5 85.5 67 88.5 65.8 90.5 62.5 88.8 58.5 86.5 61.5 85 61.5 83.5 61.5 81.5 58.5Z" fill="${F}" stroke="${D}" stroke-width="1"/>`+
+     `<path d="M83 62.5 87.8 62.8" stroke="${D}" stroke-width=".7"/>`
+    :`<path d="M85 63 85 13" stroke="${BR}" stroke-width="2.2" stroke-linecap="round"/>`+
+     `<path d="M85 4.5 89.5 13 85 16.5 80.5 13Z" fill="${G}" stroke="${D}" stroke-width=".9"/>`+
+     `<path d="M81.5 56Q79.5 60.5 82 63.3 84.5 65 87.3 64 89.5 61 88.3 56.5 86 59 84.8 59 83.3 59 81.5 56Z" fill="${F}" stroke="${D}" stroke-width="1"/>`+
+     `<path d="M82.6 59.5 87.5 59.8" stroke="${D}" stroke-width=".7"/>`;
+  const half=hair+robeBase+collar+trim+panel+face+mouth+beard+hem+hat+prop;
   return `<rect x="8" y="6" width="84" height="128" rx="3" fill="none" stroke="#6f6a5e" stroke-width="1.1"/><rect x="11.5" y="9.5" width="77" height="121" rx="2" fill="none" stroke="#6f6a5e" stroke-width=".55"/>`+
     pipAt(su,21,34,15,0)+pipAt(su,79,106,15,1)+
     `<g>${half}</g><g transform="rotate(180 50 70)">${half}</g>`}
 function jokerArt(){
-  const {D,F,G}=CD;
-  return `<path d="M40 46C34 40 26 40 22 46M60 46C66 40 74 40 78 46M50 44 50 30" stroke="currentColor" stroke-width="4" fill="none" stroke-linecap="round"/>`+
-    `<circle cx="22" cy="48" r="4.2" fill="currentColor"/><circle cx="78" cy="48" r="4.2" fill="currentColor"/><circle cx="50" cy="27" r="4.2" fill="currentColor"/>`+
-    `<path d="M34 74 35 58C35 48 41 42 50 42 59 42 65 48 65 58L66 74Q50 66 34 74Z" fill="currentColor"/>`+
-    `<circle cx="50" cy="84" r="13" fill="${F}" stroke="${D}" stroke-width="1.5"/>`+
-    `<circle cx="45" cy="81.5" r="1.2" fill="${D}"/><circle cx="55" cy="81.5" r="1.2" fill="${D}"/>`+
-    `<path d="M43.5 88.5Q50 94 56.5 88.5" stroke="${D}" stroke-width="1.3" fill="none" stroke-linecap="round"/>`+
-    `<path d="M35 95 41 102 46 95.5 52 102 58 95.5 64 102 66 95Z" fill="${G}" stroke="${D}" stroke-width=".8"/>`+
-    `<text x="50" y="117" text-anchor="middle" font-size="11.5" font-weight="800" letter-spacing="2.5" fill="currentColor" stroke="none">JOKER</text>`+
-    `<g fill="#26262e"><svg x="15" y="88" width="10" height="10" viewBox="0 0 100 100">${SUIT.S.p}</svg><svg x="74" y="12" width="10" height="10" viewBox="0 0 100 100">${SUIT.C.p}</svg></g>`+
-    `<g fill="#c02830"><svg x="76" y="86" width="10" height="10" viewBox="0 0 100 100">${SUIT.H.p}</svg><svg x="14" y="14" width="10" height="10" viewBox="0 0 100 100">${SUIT.D.p}</svg></g>`}
+  const {G,R,B,D,F,E,GR}=CD;
+  return `<path d="M45 25C39 21 34.5 14 36.5 6.5" stroke="currentColor" stroke-width="4.5" fill="none" stroke-linecap="round"/>`+
+    `<path d="M61 25C67 21 71.5 14 69.5 6.5" stroke="currentColor" stroke-width="4.5" fill="none" stroke-linecap="round"/>`+
+    `<path d="M53 24C53 19 53 14 53 9" stroke="currentColor" stroke-width="4.5" fill="none" stroke-linecap="round"/>`+
+    `<circle cx="36.2" cy="5" r="2.8" fill="${G}" stroke="${D}" stroke-width=".9"/><circle cx="69.8" cy="5" r="2.8" fill="${G}" stroke="${D}" stroke-width=".9"/><circle cx="53" cy="7.2" r="2.8" fill="${G}" stroke="${D}" stroke-width=".9"/>`+
+    `<path d="M43.5 26Q53 19.5 62.5 26L62.5 30Q53 24.5 43.5 30Z" fill="currentColor" stroke="${D}" stroke-width="1"/>`+
+    `<circle cx="53" cy="37" r="9" fill="${F}" stroke="${D}" stroke-width="1.3"/>`+
+    `<path d="M48.4 34.4Q50.4 33.2 52.4 34.4" stroke="${D}" stroke-width=".9" fill="none"/>`+
+    `<path d="M53.6 34.4Q55.6 33.2 57.6 34.4" stroke="${D}" stroke-width=".9" fill="none"/>`+
+    `<circle cx="50.4" cy="36.2" r="1" fill="${D}"/><circle cx="55.6" cy="36.2" r="1" fill="${D}"/>`+
+    `<circle cx="46.8" cy="39.5" r="1.4" fill="#e2907f" opacity=".55"/><circle cx="59.2" cy="39.5" r="1.4" fill="#e2907f" opacity=".55"/>`+
+    `<path d="M48.5 40.5Q53 45.5 57.5 40.5" stroke="${D}" stroke-width="1.2" fill="none" stroke-linecap="round"/>`+
+    `<path d="M44.5 45Q46.5 49 49 45.8Q51 49.5 53 46Q55 49.5 57 45.8Q59.5 49 61.5 45L62 48.5Q53 53 44 48.5Z" fill="${E}" stroke="${D}" stroke-width=".9"/>`+
+    `<path d="M46 49 60 49 63.5 68 42.5 68Z" fill="${R}" stroke="${D}" stroke-width="1.2" stroke-linejoin="round"/>`+
+    `<path d="M53 49 60 49 63.5 68 53 68Z" fill="${B}" stroke="${D}" stroke-width="1"/>`+
+    `<path d="M47.5 53.5 50 56.5 47.5 59.5 45 56.5Z" fill="${G}" stroke="${D}" stroke-width=".6"/>`+
+    `<path d="M58.5 53.5 61 56.5 58.5 59.5 56 56.5Z" fill="${G}" stroke="${D}" stroke-width=".6"/>`+
+    `<path d="M43 60.5 63 60.5 63.3 64 42.7 64Z" fill="${G}" stroke="${D}" stroke-width=".9"/>`+
+    `<path d="M46 49.5C41 51 36.5 54.5 33.5 59" stroke="${R}" stroke-width="4.6" fill="none" stroke-linecap="round"/>`+
+    `<circle cx="32.6" cy="60.8" r="2.5" fill="${F}" stroke="${D}" stroke-width=".9"/>`+
+    `<path d="M60 49.5C64.5 47.5 68.5 44 71 39" stroke="${B}" stroke-width="4.6" fill="none" stroke-linecap="round"/>`+
+    `<circle cx="71.8" cy="37.2" r="2.5" fill="${F}" stroke="${D}" stroke-width=".9"/>`+
+    `<path d="M42.5 68 63.5 68 64.5 77Q53 81.5 41.5 77Z" fill="${G}" stroke="${D}" stroke-width="1.1"/>`+
+    `<path d="M47.5 68.5 47 78.5M53 68.5 53 79.5M58.5 68.5 59 78.5" stroke="${D}" stroke-width=".8"/>`+
+    `<path d="M47 80 47 96 52 96 52 80Z" fill="${R}" stroke="${D}" stroke-width="1"/>`+
+    `<path d="M54 80 54 96 59 96 59 80Z" fill="${B}" stroke="${D}" stroke-width="1"/>`+
+    `<path d="M47 84h5M47 88h5M47 92h5M54 84h5M54 88h5M54 92h5" stroke="${E}" stroke-width="1.2"/>`+
+    `<path d="M46.5 96 52.5 96 52.5 99Q48 102.5 43.5 99.5 42.5 96.8 46.5 96Z" fill="${B}" stroke="${D}" stroke-width="1"/>`+
+    `<circle cx="43" cy="98.5" r="1.4" fill="${G}" stroke="${D}" stroke-width=".6"/>`+
+    `<path d="M53.5 96 59.5 96 59.5 99Q55 102.5 50.5 99.5 49.5 96.8 53.5 96Z" fill="${R}" stroke="${D}" stroke-width="1"/>`+
+    `<circle cx="50" cy="98.5" r="1.4" fill="${G}" stroke="${D}" stroke-width=".6"/>`+
+    `<text x="53" y="118" text-anchor="middle" font-size="12" font-weight="800" letter-spacing="2.5" fill="currentColor" stroke="none">JOKER</text>`+
+    `<g fill="#26262e"><svg x="14" y="86" width="9" height="9" viewBox="0 0 100 100">${SUIT.S.p}</svg><svg x="78" y="16" width="9" height="9" viewBox="0 0 100 100">${SUIT.C.p}</svg></g>`+
+    `<g fill="#c02830"><svg x="80" y="84" width="9" height="9" viewBox="0 0 100 100">${SUIT.H.p}</svg><svg x="13" y="18" width="9" height="9" viewBox="0 0 100 100">${SUIT.D.p}</svg></g>`}
 function cornerHtml(rk,su){
   const ic=su?`<i class="su"><svg viewBox="0 0 100 100">${SUIT[su].p}</svg></i>`:`<i class="su"><svg viewBox="0 0 100 100">${STAR}</svg></i>`;
   const rc=rk=='10'?'rk ten':'rk';
