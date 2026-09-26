@@ -8,7 +8,7 @@ td.home{background:#2f3a33}td.sel{outline:3px solid #f5c542;outline-offset:-3px}
 .coord{position:absolute;right:3px;bottom:1px;font-size:10px;color:#777}
 .card{display:inline-block;font-size:13px;font-weight:600;padding:1px 4px;margin:1px;border-radius:3px}
 .r{background:#b33a3a;color:#fff}.b{background:#111;color:#ddd;border:1px solid #666}.hid{opacity:.85;font-style:italic}.rev{outline:2px solid #f5c542;outline-offset:0}.rev::after{content:'\1F441';font-size:10px;margin-left:2px}#deadp{font-size:13px;background:#15181b;padding:6px;border-radius:4px;margin-bottom:8px}#deadp .card{font-size:12px}
-button{background:#3a4450;color:#eee;border:1px solid #556;border-radius:4px;padding:5px 9px;margin:2px;cursor:pointer}button:hover{background:#4a5666}
+button{background:#3a4450;color:#eee;border:1px solid #556;border-radius:4px;padding:5px 9px;margin:2px;cursor:pointer}button:hover{background:#4a5666}button[aria-pressed="true"]{background:#385947;border-color:#88bb98}
 select{background:#2b3036;color:#eee;border:1px solid #556;padding:3px}
 #status{font-size:16px;margin:8px 0;min-height:22px}#log{font-size:12px;max-height:340px;overflow:auto;background:#15181b;padding:6px;border-radius:4px;white-space:pre-wrap}
 .row{margin:6px 0}.muted{color:#999;font-size:12px}
@@ -17,7 +17,7 @@ select{background:#2b3036;color:#eee;border:1px solid #556;padding:3px}
 Opponent <select id="model"><option value="patient:/models/champion-it32.bin">Champion (it32: patient strategy + deep-target net)</option><option value="patient:/models/champion-it31.bin">it31 (patient strategy + hybrid-trained net)</option><option value="patient:/models/champion-it29.bin">it30 (patient strategy + it29 net)</option><option value="/models/champion-it29.bin">it29 (search only)</option><option value="/models/champion-it28.bin">it28 (~4940 games)</option><option value="/models/cq-3000.bin">3000-game checkpoint</option><option value="/models/your-net.bin">Your net (checards_model.bin)</option><option value="/models/old-champion.bin">Old champion (cycle 4)</option></select>
 Strength <select id="iters"><option value="250" selected>Champion default (250 sims/move)</option><option value="60">Gate strength (60 sims/move)</option><option value="400">Strong (400)</option><option value="2000">Very strong (2000)</option></select>
 You play <select id="side"><option value="1">Red (moves first)</option><option value="0">Black</option></select>
-<button id="newg">New game</button></div>
+<button id="newg">New game</button><button id="music" type="button" aria-pressed="false" title="Music is off until you turn it on">Music: off</button></div>
 <div id="status">Loading engine...</div>
 <table id="board"></table>
 <div class="row" id="actions"></div>
@@ -28,6 +28,34 @@ You play <select id="side"><option value="1">Red (moves first)</option><option v
 <script>/*ENGINE*/</script>
 <script>
 let M, S, sel=null, gameId=null, aiBusy=false;
+// Source-page URLs are relative; build.sh embeds the same audio into the single-file release.
+const AUDIO_FILES=/*AUDIO_FILES*/{"menu":["audio/checards-menu.ogg","audio/checards-menu.mp3"],"game":["audio/checards-game.ogg","audio/checards-game.mp3"],"win":["audio/checards-win.ogg","audio/checards-win.mp3"],"lose":["audio/checards-lose.ogg","audio/checards-lose.mp3"]};
+const musicTracks={};let musicOn=false, musicPhase=null, musicResult=null;
+for(const [key,[ogg,mp3]] of Object.entries(AUDIO_FILES)){
+ const a=new Audio();a.preload='none';a.loop=key==='menu'||key==='game';a.volume=key==='menu'?.24:key==='game'?.19:.33;
+ const sourceOgg=document.createElement('source');sourceOgg.src=ogg;sourceOgg.type='audio/ogg';a.appendChild(sourceOgg);
+ const sourceMp3=document.createElement('source');sourceMp3.src=mp3;sourceMp3.type='audio/mpeg';a.appendChild(sourceMp3);
+ musicTracks[key]=a;
+}
+let currentMusic=null;
+function playMusic(key){
+ if(currentMusic===key)return;
+ for(const track of Object.values(musicTracks)){track.pause();track.currentTime=0}
+ currentMusic=key;if(!key||!musicOn)return;
+ // Browsers may reject autoplay: only a click on Music starts playback.
+ musicTracks[key].play().catch(()=>{currentMusic=null});
+}
+function updateMusic(){
+ if(!musicOn){playMusic(null);return}
+ let key=musicPhase==='play'?'game':'menu';
+ if(musicPhase==='over')key=musicResult===1+S.human?'win':'lose';
+ playMusic(key);
+}
+function setMusicState(phase,result){
+ if(musicPhase===phase && (phase!=='over'||musicResult===result))return;
+ musicPhase=phase;musicResult=result;updateMusic();
+}
+
 const RES={1:'Red wins',2:'Black wins',3:'Draw (mutual)',4:'Draw (inactivity)',5:'Aborted (ply safety limit)'};
 const $=id=>document.getElementById(id);
 const st=()=>JSON.parse(M.UTF8ToString(M._cg_state()));
@@ -62,7 +90,7 @@ function render(){S=st();const t=$('board');t.innerHTML='';const hr=S.human==0;c
    S.legal.forEach((a,i)=>{if(a.spawn){const b=document.createElement('button');b.textContent='Spawn at column '+a.to[0];b.onclick=()=>act(i);A.appendChild(b)}});
    if(sel&&pendingDest){S.legal.forEach((a,i)=>{if(!a.spawn&&a.from[0]==sel[0]&&a.from[1]==sel[1]&&a.to[0]==pendingDest[0]&&a.to[1]==pendingDest[1]){const b=document.createElement('button');b.textContent='Move '+a.card;b.onclick=()=>act(i);A.appendChild(b)}})}}}
  else if(S.phase=='over')s='Game over: '+RES[S.result]+' - log saved.';
- $('status').textContent=s;renderDead()}
+ $('status').textContent=s;setMusicState(S.phase,S.result);renderDead()}
 let pendingDest=null;
 function act(i){pendingDest=null;sel=null;M._cg_human_act(i);syncLog();save();render();maybeAI()}
 function click(x,y){if(!S)return;if(S.phase=='setup_place'){if(!M._cg_place(x,y)){$('status').textContent='Not a legal setup square.';return}render();maybeAI();return}
@@ -74,6 +102,11 @@ function maybeAI(){S=st();if(S.phase=='play'&&S.mover!=S.human&&!aiBusy){aiBusy=
  else if(S.phase=='play'&&S.mover==S.human){syncLog();save()} else if(S.phase=='over'){syncLog();save();render()}}
 function newGame(){gameId=new Date().toISOString();logSeen=0;$('log').textContent='';sel=null;pendingDest=null;
  const seed=(Math.random()*4e9)>>>0;M.ccall('cg_new','number',['string','number','number','number'],[$('model').value,+$('side').value,+$('iters').value,seed]);syncLog();render();maybeAI()}
+$('music').onclick=()=>{
+ musicOn=!musicOn;const b=$('music');b.textContent='Music: '+(musicOn?'on':'off');b.setAttribute('aria-pressed',String(musicOn));
+ // Reset when enabling so the selected loop starts at the beginning.
+ if(musicOn){currentMusic=null;updateMusic()}else playMusic(null);
+};
 $('newg').onclick=newGame;$('dl').onclick=()=>download('checards-game-'+gameId+'.json',JSON.parse(M.UTF8ToString(M._cg_log())));
 $('dlall').onclick=()=>download('checards-all-games.json',JSON.parse(localStorage.getItem('checardsGames')||'{}'));
 function autotest(n){let k=0;const tick=()=>{S=st();if(k++>=n||S.phase=='over'){render();return}

@@ -9,7 +9,15 @@ em++ -std=c++17 -O3 -DNDEBUG -Iengine/include engine/src/board.cpp engine/src/co
   -sEXPORTED_FUNCTIONS=_cg_new,_cg_place,_cg_draft,_cg_human_act,_cg_ai_step,_cg_state,_cg_log -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,UTF8ToString \
   --embed-file web/models@/models
 python3 - <<'PY'
-h=open('web/index.html').read();e=open('web/dist/engine.js').read()
-open('web/dist/checards-play.html','w').write(h.replace('/*ENGINE*/',e,1))
+import base64, json
+from pathlib import Path
+h=Path('web/index.html').read_text(); e=Path('web/dist/engine.js').read_text()
+audio={}
+for key in ('menu','game','win','lose'):
+    audio[key]=[f'data:audio/{mime};base64,'+base64.b64encode(Path(f'web/audio/checards-{key}.{ext}').read_bytes()).decode('ascii')
+                for ext,mime in (('ogg','ogg'),('mp3','mpeg'))]
+start=h.index('/*AUDIO_FILES*/'); end=h.index(';',start)
+h=h[:start]+json.dumps(audio,separators=(',',':'))+h[end:]
+Path('web/dist/checards-play.html').write_text(h.replace('/*ENGINE*/',e,1))
 PY
 ls -la web/dist/checards-play.html
