@@ -1,4 +1,4 @@
-name = "checards-server"
+name = "checards"
 main = "src/index.js"
 compatibility_date = "2026-09-25"
 

@@ -29,20 +29,21 @@ npx wrangler login        # opens a browser; approve the Cloudflare OAuth grant
 ```sh
 npx wrangler deploy
 ```
-This creates **one** `checards-server` Worker, both Durable Object classes
+This creates **one** `checards` Worker, both Durable Object classes
 (`GameRoom`, `Lobby`) via the v1 migration, and its static asset bundle from
 `web/dist/`. The `[assets]` path in `wrangler.toml` is relative to
 `server/worker/`; do not import `web/` as a separate Workers & Pages project.
 For a Git-connected Workers & Pages production deployment, set the root
 directory to `server/worker`, leave build command empty, and use
 `npx wrangler deploy` as the deploy command. The Worker name is
-`checards-server`. Do not point the output directory at `web/`.
+`checards`. Do not point the output directory at `web/`.
 
 ## 4. Put the unified Worker on checards.sighton.ca
-First remove `checards.sighton.ca` from any old static `checards` Worker
-that owns it. Then either uncomment the `routes` line in `wrangler.toml`
+The single `checards` Worker serves both the page and API. Attach
+`checards.sighton.ca` to this Worker. Then either uncomment the `routes`
+line in `wrangler.toml`
 and `npx wrangler deploy` again, or in the dashboard: Workers & Pages →
-checards-server → Settings → Domains & Routes → Add → Custom Domain →
+checards → Settings → Domains & Routes → Add → Custom Domain →
 `checards.sighton.ca` (on a zone you own).
 
 ## 5. Smoke-test it
