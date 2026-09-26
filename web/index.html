@@ -59,16 +59,19 @@ body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-a
 .btn[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
 #themeBtn svg{display:block;width:17px;height:17px;fill:currentColor}
 
-.layout{display:flex;gap:22px;max-width:1080px;margin:0 auto;padding:18px 16px 40px;align-items:flex-start}
-.board-col{flex:0 1 660px;min-width:0}
-.side{flex:1 1 320px;min-width:300px;max-width:400px;position:sticky;top:16px}
+/* Let the board take the main viewport rather than reserving a wide empty gutter. */
+.layout{display:flex;gap:22px;max-width:1600px;margin:0 auto;padding:18px 20px 24px;align-items:flex-start}
+.board-col{flex:1 1 0;min-width:0}
+.side{flex:0 0 clamp(290px,26vw,360px);min-width:0;position:sticky;top:16px}
+.side .status{margin:0 0 12px;align-items:flex-start}
+.side .actions{margin:0 0 12px}
 @media(max-width:920px){
   .layout{flex-direction:column;padding:12px 10px 32px;gap:14px}
   .board-col{flex:none;width:100%}
-  .side{position:static;max-width:none;width:100%}
+  .side{position:static;max-width:none;width:100%;flex:none}
 }
 
-.pbar{display:flex;align-items:center;gap:10px;padding:7px 6px;min-height:50px}
+.pbar{display:flex;align-items:center;gap:10px;padding:4px 6px;min-height:40px}
 .avatar{width:34px;height:34px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:17px;color:#fff;flex:0 0 auto}
 .avatar.fr{background:var(--red)} .avatar.fb{background:var(--navy)}
 .who{min-width:0}
@@ -78,8 +81,15 @@ body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-a
 .dead{display:flex;align-items:center;flex-wrap:wrap;gap:2px;justify-content:flex-end;max-width:52%}
 .pile{display:flex;align-items:center;gap:5px;color:var(--muted);font-size:12px;font-weight:650;flex:0 0 auto}
 
-.board-wrap{position:relative;width:100%;max-width:660px;margin:0 auto}
-@media(min-width:921px) and (min-height:541px){.board-wrap{max-width:min(660px,calc(100dvh - 300px))}}
+/* The board owns the main column; the tray follows it and the sidebar carries status. */
+.board-wrap{position:relative;width:100%;max-width:900px;margin:0 auto}
+@media(min-width:921px){
+  /* The hand must remain in view with the board for drag-to-place to work. */
+  .board-wrap{max-width:min(100%,900px,calc(100dvh - 140px))}
+  .layout:has(.setup-hand:not(.hidden)) .board-wrap{max-width:min(100%,900px,calc(100dvh - 215px))}
+  .board-col>.pbar{display:none}
+  .side>.pbar{padding:3px 0}
+}
 .board{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));grid-template-rows:repeat(7,minmax(0,1fr));width:100%;aspect-ratio:1;border-radius:8px;overflow:hidden;box-shadow:0 4px 18px var(--board-sh)}
 .sq{position:relative;display:flex;align-items:center;justify-content:center;min-width:0;min-height:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .sq.l{background:var(--sq-l)} .sq.d{background:var(--sq-d)}
@@ -95,12 +105,18 @@ body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-a
 @keyframes pulse{50%{opacity:.3}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 @media(pointer:coarse){.btn{min-height:44px;padding:10px 14px}.tab-btn{min-height:44px}}
-@media(max-width:380px){.topbar{flex-wrap:wrap;gap:8px}.brand{font-size:17px}}
+@media(max-width:600px){
+  .topbar{flex-wrap:wrap;gap:8px;padding:8px 10px}
+  .brand{font-size:17px}
+  .top-actions{width:100%;justify-content:space-between;gap:4px}
+  .top-actions .btn{font-size:11px;padding:7px 5px;min-width:0;min-height:36px}
+  #themeBtn{padding:7px 9px}
+}
 @media(max-width:920px){.scrim{position:fixed;border-radius:0;z-index:20}.side{min-width:0}}
 @media(orientation:landscape) and (max-height:540px){
   .layout{flex-direction:row;align-items:flex-start}
   .board-col{flex:0 1 auto}
-  .board-wrap{max-width:calc(100dvh - 175px)}
+  .board-wrap{max-width:min(100%,calc(100dvh - 175px))}
   .side{position:static;flex:1 1 240px;min-width:230px;max-width:none}
 }
 .sq:focus-visible{outline:3px solid #fff;outline-offset:-3px;box-shadow:inset 0 0 0 5px var(--accent-d)}
@@ -113,7 +129,7 @@ body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-a
 
 /* Card faces modelled on standard English-pattern poker cards (2.5:3.5 ratio) */
 .pc{position:relative;display:inline-block;line-height:1;text-align:center;
-  font-size:calc(var(--sq)*.155);width:2.3em;height:3.22em;border-radius:.16em;
+  font-size:calc(var(--sq)*.235);width:2.3em;height:3.22em;border-radius:.16em;
   background:linear-gradient(165deg,#fefefd 0%,#fbf9f3 55%,#f1eddf 100%);
   border:1px solid #a9a294;
   box-shadow:inset 0 0 0 1px #fff,inset 0 0 0 2px rgba(120,110,90,.16),inset 0 -.5em .9em -.55em rgba(90,80,60,.14),0 1px 2px rgba(0,0,0,.42);
@@ -145,13 +161,25 @@ body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-a
 .pc.sm{font-size:12px}
 .pc.xs{font-size:9.5px}
 .pc.big{font-size:19px}
-@media(max-width:920px){.pc{font-size:calc(var(--sq)*.205)}}
+@media(max-width:920px){.pc{font-size:calc(var(--sq)*.225)}}
 .eye{position:absolute;top:-.55em;right:-.55em;font-size:.6em;background:#f5c542;border-radius:50%;width:1.6em;height:1.6em;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 2px rgba(0,0,0,.4);z-index:2}
 
 .stack{display:flex;align-items:center;justify-content:center;max-width:96%}
 .stack .pc+.pc{margin-left:-1.55em}
 .n{position:absolute;top:1px;right:2px;z-index:3;min-width:1.35em;text-align:center;background:rgba(20,20,20,.78);color:#fff;font-size:max(9px,calc(var(--sq)*.13));font-weight:700;border-radius:1em;padding:.05em .3em;line-height:1.35}
 
+/* Setup hand sits just below the board, without covering legal squares. */
+.setup-hand{margin:8px auto 0;max-width:900px;padding:5px 9px;background:var(--panel);border:1px solid var(--line);border-radius:9px}
+.setup-hand-title{font-size:12px;color:var(--muted);font-weight:650;margin-bottom:2px}
+.setup-cards{display:flex;align-items:flex-start;gap:5px;overflow-x:auto;padding:2px 2px 3px;scrollbar-width:thin}
+.hand-card{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:43px;padding:3px;background:var(--surface);border:2px solid transparent;border-radius:7px;color:var(--text);font:inherit;cursor:grab;touch-action:pan-x}
+.hand-card .pc{font-size:15px}
+.hand-card .hand-name{font-size:9px;white-space:nowrap}
+.hand-card.selected{border-color:var(--accent);background:var(--surface-hover)}
+.hand-card:disabled{cursor:default;opacity:.55}
+.hand-card:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.hand-ghost{position:fixed;z-index:40;pointer-events:none;opacity:.85;transform:translate(-50%,-50%)}
+.sq.drop-target{box-shadow:inset 0 0 0 4px var(--accent)}
 .status{display:flex;align-items:center;gap:9px;margin-top:12px;padding:10px 14px;background:var(--panel);border:1px solid var(--line);border-radius:9px;font-size:14px;min-height:44px}
 .status.over{border-color:var(--gold);background:var(--over-bg)}
 .tdot{width:9px;height:9px;border-radius:50%;background:var(--accent);flex:0 0 auto;box-shadow:0 0 6px var(--accent)}
@@ -293,10 +321,12 @@ select{width:100%;background:var(--surface);color:var(--text);border:1px solid v
       <div class="scrim hidden" id="draft" role="dialog" aria-modal="true" aria-label="Pick your next card"></div>
     </div>
     <div class="pbar" id="barBottom"></div>
-    <div class="status" id="status" aria-live="polite">Loading engine&hellip;</div>
-    <div class="actions" id="actions"></div>
+    <div class="setup-hand hidden" id="setupHand" aria-label="Your setup cards"></div>
   </section>
   <aside class="side" id="sidePanel">
+    <div class="sidebar-players" id="sidebarPlayers"></div>
+    <div class="status" id="status" aria-live="polite">Loading engine&hellip;</div>
+    <div class="actions" id="actions"></div>
     <div class="tabs" role="tablist">
       <button class="tab-btn active" data-tab="moves" type="button" role="tab" id="tab-moves" aria-selected="true" aria-controls="pane-moves">Moves</button>
       <button class="tab-btn" data-tab="newgame" type="button" role="tab" id="tab-newgame" aria-selected="false" aria-controls="pane-newgame" tabindex="-1">New game</button>
@@ -591,6 +621,12 @@ function mySetupCount(){let n=0;for(const t of S.board)for(const c of t)if(c.own
 function deadCards(){if(onlineGame)return [[],[]];const D=[[],[]];let L=[];try{L=JSON.parse(M.UTF8ToString(M._cg_log()))}catch(e){}
   for(const ev of L)for(const c of (ev.combat||[])){const a=c.attacker,d=1-a;if(c.attackerDied)c.att.forEach(n=>D[a].push(n));if(c.defenderDied)c.def.forEach(n=>D[d].push(n))}
   return D}
+function positionPlayerBars(){
+  const desktop=innerWidth>920&&!(innerHeight<=540&&matchMedia('(orientation: landscape)').matches);
+  const target=desktop?$('sidebarPlayers'):$('boardWrap').parentNode;
+  if(desktop){target.append($('barTop'),$('barBottom'))}
+  else if($('barTop').parentNode!==target){target.insertBefore($('barTop'),$('boardWrap'));target.insertBefore($('barBottom'),$('setupHand'))}
+}
 function setSq(){const w=$('board').clientWidth;if(w)document.documentElement.style.setProperty('--sq',(w/7)+'px')}
 
 function renderBoard(){
@@ -706,21 +742,72 @@ function renderChooser(){
   C.classList.remove('hidden');
   const firstC=C.querySelector('.cbtn');if(firstC)firstC.focus()}
 
-function renderDraft(){
-  const D=$('draft');
-  if(S.phase!='setup_draft'){D.classList.add('hidden');D.innerHTML='';return}
-  D.innerHTML=`<div class="sheet"><h3>Pick your next card</h3><div class="sub">The cards you skip stay in your draw pile.</div><div class="draft-cards"></div></div>`;
-  const dc=D.querySelector('.draft-cards');
-  S.pool.forEach((c,i)=>{const b=document.createElement('button');b.type='button';b.className='cbtn';
-    b.innerHTML=faceHtml(c,'big',S.human)+`<span class="nm">${prettyName(c)}</span>`;
-    b.onclick=()=>{if(onlineGame)sendOnline({t:'draft',idx:i});else{M._cg_draft(i);render();maybeAI()}};b.disabled=!!onlinePending;dc.appendChild(b)});
-  D.classList.remove('hidden');
-  const first=dc.querySelector('.cbtn');if(first)first.focus()}
+function pickSetupCard(i){
+  if(S.phase!='setup_draft'||onlinePending||!onlineConnected)return;
+  if(onlineGame)sendOnline({t:'draft',idx:i});
+  else{M._cg_draft(i);render();maybeAI()}
+}
+function renderSetupHand(){
+  const H=$('setupHand');
+  if(S.phase!='setup_place'&&S.phase!='setup_draft'){H.classList.add('hidden');H.innerHTML='';return}
+  const placing=S.phase=='setup_place';
+  // The engine fixes the first two Aces and accepts a draft choice before each later placement.
+  // Once selected, a card cannot be swapped until it has been placed.
+  const cards=placing?[S.pending,...(S.pool||[])]:S.pool||[];
+  H.innerHTML='<div class="setup-hand-title">'+(placing?'Selected card - tap a highlighted square or drag this card onto it':'Choose a card, then place it on a highlighted square')+'</div><div class="setup-cards"></div>';
+  const row=H.querySelector('.setup-cards');
+  cards.forEach((c,i)=>{
+    const b=document.createElement('button');b.type='button';b.className='hand-card'+(placing&&i===0?' selected':'');
+    b.disabled=onlinePending||placing&&i!==0;
+    b.setAttribute('aria-label',(placing&&i===0?'Selected ':'Choose ')+prettyName(c));
+    b.innerHTML=faceHtml(c,'',S.human)+'<span class="hand-name">'+prettyName(c)+'</span>';
+    if(!placing)b.onclick=()=>{if(suppressHandClick){suppressHandClick=false;return}pickSetupCard(i)};
+    // For desktop and touch: vertical drag drops onto a legal board square.
+    // Horizontal swipes still scroll the row when it is wider than the screen.
+    b.addEventListener('pointerdown',e=>startHandDrag(e,placing?null:i));
+    row.appendChild(b)
+  });
+  H.classList.remove('hidden');
+}
+let handDrag=null, pendingSetupDrop=null, suppressHandClick=false;
+function startHandDrag(e,index){
+  if(e.button!==0||onlinePending||!onlineConnected)return;
+  handDrag={id:e.pointerId,index,startX:e.clientX,startY:e.clientY,source:e.currentTarget,ghost:null};
+}
+window.addEventListener('pointermove',e=>{
+  const d=handDrag;if(!d||d.id!==e.pointerId)return;
+  if(!d.ghost){
+    if(Math.abs(e.clientY-d.startY)<12||Math.abs(e.clientY-d.startY)<Math.abs(e.clientX-d.startX))return;
+    d.ghost=d.source.querySelector('.pc').cloneNode(true);d.ghost.classList.add('hand-ghost');document.body.appendChild(d.ghost);
+  }
+  d.ghost.style.left=e.clientX+'px';d.ghost.style.top=e.clientY+'px';
+  document.querySelectorAll('.sq.drop-target').forEach(s=>s.classList.remove('drop-target'));
+  const sq=document.elementFromPoint(e.clientX,e.clientY)?.closest('.sq.dest');
+  if(sq)sq.classList.add('drop-target');
+});
+window.addEventListener('pointerup',e=>{
+  const d=handDrag;if(!d||d.id!==e.pointerId)return;
+  handDrag=null;
+  if(!d.ghost)return;
+  suppressHandClick=true;queueMicrotask(()=>setTimeout(()=>{suppressHandClick=false},0));
+  d.ghost.remove();document.querySelectorAll('.sq.drop-target').forEach(s=>s.classList.remove('drop-target'));
+  const sq=document.elementFromPoint(e.clientX,e.clientY)?.closest('.sq.dest');
+  if(!sq)return;
+  const x=+sq.dataset.x,y=+sq.dataset.y;
+  if(d.index===null)click(x,y);
+  else{
+    pickSetupCard(d.index);
+    // Online draft is asynchronous: wait for the server's state before accepting placement.
+    if(onlineGame)pendingSetupDrop=[x,y];
+    else click(x,y);
+  }
+});
+window.addEventListener('pointercancel',()=>{if(handDrag?.ghost)handDrag.ghost.remove();handDrag=null});
 
 function render(){
-  S=st();if(!S)return;setSq();setMusicState(S.phase,S.result);
+  positionPlayerBars();S=st();if(!S)return;setSq();setMusicState(S.phase,S.result);
   const refocus=focusSq&&!pendingDest&&S.phase!='setup_draft'&&$('board').contains(document.activeElement);
-  renderBoard();renderBars();renderStatus();renderActions();renderChooser();renderDraft();renderScout();
+  renderBoard();renderBars();renderStatus();renderActions();renderChooser();renderSetupHand();renderScout();
   if(refocus){const t=document.querySelector(`[data-x="${focusSq[0]}"][data-y="${focusSq[1]}"]`);if(t)t.focus()}}
 
 function click(x,y){
@@ -774,6 +861,7 @@ function savePrefs(){try{localStorage.setItem('checardsUI',JSON.stringify({model
 function loadPrefs(){try{const p=JSON.parse(localStorage.getItem('checardsUI')||'null');if(!p)return;for(const k of ['model','iters','side'])if(p[k]&&$(k).querySelector(`option[value="${p[k]}"]`))$(k).value=p[k]}catch(e){}}
 
 function newGame(){
+  pendingSetupDrop=null;
   if(onlineGame)detachOnline();
   gameId=new Date().toISOString();logSeen=0;$('log').innerHTML='<div class="muted" id="logEmpty">Moves will appear here once the game starts.</div>';sel=null;pendingDest=null;lastMove=null;lastCombat=[];
   savePrefs();
@@ -835,7 +923,7 @@ $('music').onclick=()=>{
 };
 $('dl').onclick=()=>{if(onlineGame)return;download('checards-game-'+gameId+'.json',JSON.parse(M.UTF8ToString(M._cg_log())))};
 $('dlall').onclick=()=>download('checards-all-games.json',JSON.parse(localStorage.getItem('checardsGames')||'{}'));
-window.addEventListener('resize',setSq);
+window.addEventListener('resize',()=>{positionPlayerBars();setSq()});
 
 function autotest(n){let k=0;const tick=()=>{S=st();if(k++>=n||S.phase=='over'){render();return}
   if(S.phase=='setup_place'){while(!M._cg_place(Math.floor(Math.random()*7),S.human==0?Math.floor(Math.random()*3):4+Math.floor(Math.random()*3)));}
@@ -894,6 +982,8 @@ function attachOnline(net){
     if(!view||!Array.isArray(view.board))return;
     const previous=onlineView;
     onlineView={...view,human:view.you};onlinePending=false;onlineError='';
+    if(pendingSetupDrop){const [dx,dy]=pendingSetupDrop;pendingSetupDrop=null;
+      if(view.phase==='setup_place')queueMicrotask(()=>click(dx,dy))}
     if(previous&&previous!==view){sel=null;pendingDest=null}
     if(Array.isArray(view.events)&&view.events.length)lastCombat=view.events;
     const label=view.phase==='over'?`Game over - ${RES[view.result]||'finished'}`:
@@ -909,6 +999,7 @@ function attachOnline(net){
   if(net.view){onlineView={...net.view,human:net.view.you};render()}
 }
 function detachOnline(){
+  pendingSetupDrop=null;
   ++onlineSeq;onlineGame=null;onlineView=null;onlinePresence=null;
   onlinePending=false;onlineConnected=true;onlineClosed=false;onlineError='';sel=null;pendingDest=null;
   $('dl').closest('.moves-foot').classList.remove('hidden');
