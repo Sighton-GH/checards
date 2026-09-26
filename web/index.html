@@ -170,6 +170,8 @@ select{width:100%;background:var(--surface);color:var(--text);border:1px solid v
 .g-dot .gn{opacity:.7;margin-right:4px}
 .g-dot[aria-current="step"]{background:var(--accent);border-color:var(--accent-d);color:#fff}
 .g-dot:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.g-prog{height:7px;background:var(--line);border-radius:99px;margin:9px 0 2px;overflow:hidden}
+.g-fill{height:100%;width:16.67%;background:linear-gradient(90deg,var(--accent),var(--accent-d));border-radius:99px;transition:width .35s ease}
 .g-step{display:none}
 .g-step.active{display:block}
 .g-step h3{margin:6px 0 2px;font-size:14.5px}
@@ -272,6 +274,7 @@ select{width:100%;background:var(--surface);color:var(--text);border:1px solid v
     <div class="dlg-body">
       <div class="guide" id="helpGuide">
         <ol class="g-steps" id="gDots" aria-label="Guide sections"></ol>
+        <div class="g-prog" id="gProg" role="progressbar" aria-valuemin="1" aria-valuemax="6" aria-valuenow="1" aria-label="Guide progress"><div class="g-fill" id="gFill"></div></div>
         <div class="g-body" id="gBody">
           <section class="g-step" data-name="Goal">
             <h3 tabindex="-1">Goal</h3>
@@ -783,6 +786,7 @@ const hosts=['gdGoal','gdCards','gdSetup','gdMove','gdCombat','gdHidden'];
 const secs=[...G.querySelectorAll('.g-step')];
 const dotsOl=document.getElementById('gDots');
 const backBtn=document.getElementById('gBack'),nextBtn=document.getElementById('gNext'),countEl=document.getElementById('gCount');
+const progEl=document.getElementById('gProg'),fillEl=document.getElementById('gFill');
 secs.forEach((s,i)=>{
   const li=document.createElement('li');const b=document.createElement('button');
   b.type='button';b.className='g-dot';
@@ -804,6 +808,8 @@ function show(i,focus){
   dots.forEach((d,j)=>{if(j==cur)d.setAttribute('aria-current','step');else d.removeAttribute('aria-current')});
   backBtn.disabled=cur==0;nextBtn.disabled=cur==secs.length-1;
   countEl.textContent=(cur+1)+' / '+secs.length;
+  progEl.setAttribute('aria-valuenow',cur+1);
+  fillEl.style.width=((cur+1)/secs.length*100)+'%';
   if(focus)secs[cur].querySelector('h3').focus({preventScroll:true});
   startDemo()}
 backBtn.addEventListener('click',()=>show(cur-1,true));
