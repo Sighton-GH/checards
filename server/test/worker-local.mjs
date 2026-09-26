@@ -142,6 +142,21 @@ if (bm.legal.length) {
 }
 b1.ws.close();
 
+// spectate flag: watching a room with open seats must not consume a seat
+{
+  const c = await (await fetch(BASE + '/api/rooms', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ visibility: 'private', side: 'red' }) })).json();
+  const w = await new Promise((resolve, reject) => {
+    const ws = new WebSocket(`ws://localhost:8787/ws/rooms/${c.room}?spectate=1`);
+    ws.onerror = reject;
+    ws.onmessage = ev => { const m = JSON.parse(ev.data); if (m.t === 'welcome') resolve({ ws, m }); };
+  });
+  if (w.m.role !== 'spec') fail(`spectate=1 got role ${w.m.role} on open room`); else ok('spectate=1 stays spectator on open room');
+  const info = await (await fetch(BASE + '/api/rooms/' + c.room)).json();
+  // room was created by a red player, so red is legitimately claimed; black must stay open
+  if (!info.redTaken || info.blackTaken) fail(`spectate=1 seat state wrong: ${JSON.stringify(info)}`); else ok('spectate=1 leaves the open seat untouched');
+  w.ws.close();
+}
+
 // resign flow: black resigns -> red wins; double resign errors; public room leaves lobby
 black.send({ t: 'resign' });
 await new Promise(r => setTimeout(r, 700));
