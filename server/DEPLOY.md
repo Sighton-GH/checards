@@ -1,4 +1,4 @@
-# Deploying the Checards multiplayer server (Cloudflare Workers)
+# Deploying Checards on one Cloudflare Worker
 
 One-time setup, ~10 minutes. Everything runs under your own Cloudflare account;
 no credentials need to be shared.
@@ -13,9 +13,11 @@ no credentials need to be shared.
 git clone https://github.com/Sighton-GH/checards
 cd checards/server/worker
 ```
-The engine module (`server/dist/checards-server.js`) is committed, so no C++
-build is needed. (To rebuild it after engine changes: install emsdk and run
-`server/build.sh` from the repo root.)
+The engine module (`server/dist/checards-server.js`) and the playable
+frontend (`web/dist/`) are committed, so no C++ or frontend build is needed.
+The Worker serves both `/api/rooms` + room WebSockets and the static page and
+engine from the same origin. To rebuild the server engine after changes, install
+emsdk and run `server/build.sh` from the repo root.
 
 ## 2. Install and log in
 ```sh
@@ -27,17 +29,28 @@ npx wrangler login        # opens a browser; approve the Cloudflare OAuth grant
 ```sh
 npx wrangler deploy
 ```
-This creates the `checards-server` Worker and both Durable Object classes
-(`GameRoom`, `Lobby`) via the v1 migration in `wrangler.toml`.
+This creates **one** `checards-server` Worker, both Durable Object classes
+(`GameRoom`, `Lobby`) via the v1 migration, and its static asset bundle from
+`web/dist/`. The `[assets]` path in `wrangler.toml` is relative to
+`server/worker/`; do not import `web/` as a separate Workers & Pages project.
+For a Git-connected Workers & Pages production deployment, set the root
+directory to `server/worker`, leave build command empty, and use
+`npx wrangler deploy` as the deploy command. The Worker name is
+`checards-server`. Do not point the output directory at `web/`.
 
-## 4. Put it on checards.sighton.ca
-Either uncomment the `routes` line in `wrangler.toml` and `npx wrangler deploy`
-again, or in the dashboard: Workers & Pages → checards-server → Settings →
-Domains & Routes → Add → Custom Domain → `checards.sighton.ca` (free, instant on
-a zone you own).
+## 4. Put the unified Worker on checards.sighton.ca
+First remove `checards.sighton.ca` from any old static `checards` Worker
+that owns it. Then either uncomment the `routes` line in `wrangler.toml`
+and `npx wrangler deploy` again, or in the dashboard: Workers & Pages →
+checards-server → Settings → Domains & Routes → Add → Custom Domain →
+`checards.sighton.ca` (on a zone you own).
 
 ## 5. Smoke-test it
 ```sh
+# built frontend (index.html includes ./engine.js) and browser engine
+curl -I https://checards.sighton.ca/
+curl -I https://checards.sighton.ca/engine.js
+
 # create a private room (also prints your side + player token)
 curl -X POST https://checards.sighton.ca/api/rooms \
   -H 'Content-Type: application/json' -d '{"visibility":"private","side":"red"}'
@@ -45,8 +58,10 @@ curl -X POST https://checards.sighton.ca/api/rooms \
 # lobby (public rooms only)
 curl https://checards.sighton.ca/api/rooms
 ```
-Then connect a WebSocket to `wss://checards.sighton.ca/ws/rooms/<CODE>?token=<TOKEN>`
-- you should get a `welcome` message followed by a `state` message.
+Open https://checards.sighton.ca/ and confirm a game starts rather than
+stalling on "Loading engine…". Then connect a WebSocket to
+`wss://checards.sighton.ca/ws/rooms/<CODE>?token=<TOKEN>` - you should get a
+`welcome` message followed by a `state` message.
 
 ## Notes
 - Local dev: `npm run dev` (wrangler dev, serves on localhost:8787 with local

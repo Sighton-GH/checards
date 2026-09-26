@@ -99,7 +99,11 @@ export default {
       return stub.fetch(new Request('https://room/ws' + url.search, request));
     }
 
-    return json({ error: 'not found' }, 404);
+    // The frontend and API share one production Worker. Keep unknown API and
+    // WebSocket routes JSON/404 instead of serving the SPA HTML to API clients.
+    if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/ws/'))
+      return json({ error: 'not found' }, 404);
+    return env.ASSETS.fetch(request);
   },
 };
 
