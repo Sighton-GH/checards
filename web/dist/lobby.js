@@ -4,7 +4,7 @@
  *   joinRoom(code), listRooms(), spectate(code) are async exports.
  *   createRoom/joinRoom/spectate return {room|code, token?, side|role?, visibility?, session?}.
  *   listRooms returns {rooms:[{code,registeredAt,...}]} (or a rooms array).
- * On selection we dispatch window 'checards:room-selected' with
+ * On selection the transport module dispatches window 'checards:room-selected' with
  * {room, role, token, session}; board/game glue owns that event.
  * REST source: POST/GET /api/rooms, WS /ws/rooms/:code (welcome/presence).
  */
@@ -96,8 +96,8 @@ function select(session, fallbackCode, desiredRole) {
   const room = session?.room || session?.code || fallbackCode;
   const role = session?.role || session?.side || desiredRole;
   if (!codeRe.test(String(room || ''))) throw new Error('Room response had no valid code.');
-  // createRoom/joinRoom/spectate return a result wrapper; hand the board glue the real RoomSession.
-  window.dispatchEvent(new CustomEvent('checards:room-selected', {detail:{room, role, token:session?.token, session: session?.session || session}}));
+  // The transport's selectRoom already dispatched checards:room-selected with the real RoomSession;
+  // dispatching again here would attach the board glue twice.
   close();
 }
 async function act(button, work) {

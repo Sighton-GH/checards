@@ -443,7 +443,7 @@ function renderScout(){
 
 function renderStatus(){
   let h='';const over=S.phase=='over';
-  if(onlineGame&&!onlineConnected)h='<span>Disconnected. Reconnecting to the room...</span>';
+  if(onlineGame&&!onlineConnected)h=onlineClosed?`<span>${escapeText(onlineError||'The room connection was closed.')}</span>`:'<span>Disconnected. Reconnecting to the room...</span>';
   else if(onlineGame&&onlineError)h=`<span>${escapeText(onlineError)}</span>`;
   else if(onlineGame&&onlinePending)h='<span class="spin"></span><span>Waiting for server...</span>';
   else if(onlineGame&&S.human<0)h=`<span>Watching game - ${S.gamePhase==='setup'?'players are setting up':S.phase==='over'?RES[S.result]:'turn '+S.turn}</span>`;
@@ -624,7 +624,7 @@ function autotest(n){let k=0;const tick=()=>{S=st();if(k++>=n||S.phase=='over'){
 // State is solely the server's perspective-filtered snapshot. The server owns
 // legal indices, setup, and turn resolution; this UI never runs local AI online.
 let onlineGame=null,onlineView=null,onlinePresence=null,onlinePending=false,
-    onlineConnected=true,onlineError='',onlineSeq=0;
+    onlineConnected=true,onlineClosed=false,onlineError='',onlineSeq=0;
 const escapeText=x=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function sendOnline(msg){
   if(!onlineGame||!onlineConnected||onlinePending)return;
@@ -634,7 +634,7 @@ function sendOnline(msg){
 function attachOnline(net){
   if(!net||typeof net.on!=='function'||typeof net.send!=='function')throw Error('A connected room client is required');
   const seq=++onlineSeq;onlineGame=net;onlineView=null;onlinePresence=null;
-  onlinePending=false;onlineConnected=!net.status||net.status==='connected';onlineError='';sel=null;pendingDest=null;
+  onlinePending=false;onlineConnected=!net.status||net.status==='connected';onlineClosed=net.status==='closed';onlineError='';sel=null;pendingDest=null;
   lastMove=null;lastCombat=[];gameId=null;logSeen=0;
   $('log').innerHTML='<div class="muted" id="logEmpty">Waiting for server...</div>';
   $('dl').closest('.moves-foot').classList.add('hidden');
@@ -655,13 +655,13 @@ function attachOnline(net){
   });
   net.on('presence',p=>{if(!current())return;onlinePresence=p;if(onlineView)render()});
   net.on('error',e=>{if(!current())return;onlinePending=false;onlineError=typeof e==='string'?e:e?.msg||'The server rejected that action.';if(onlineView)render()});
-  net.on('connection',s=>{if(!current())return;onlineConnected=s==='connected';if(onlineConnected){onlinePending=false;onlineError=''}if(onlineView)render()});
+  net.on('connection',s=>{if(!current())return;onlineConnected=s==='connected';onlineClosed=s==='closed';if(onlineConnected){onlinePending=false;onlineError=''}if(onlineView)render()});
   if(net.presence)onlinePresence=net.presence;
   if(net.view){onlineView={...net.view,human:net.view.you};render()}
 }
 function detachOnline(){
   ++onlineSeq;onlineGame=null;onlineView=null;onlinePresence=null;
-  onlinePending=false;onlineConnected=!net.status||net.status==='connected';onlineError='';sel=null;pendingDest=null;
+  onlinePending=false;onlineConnected=true;onlineClosed=false;onlineError='';sel=null;pendingDest=null;
   $('dl').closest('.moves-foot').classList.remove('hidden');
   if(M)render();
 }
