@@ -3,6 +3,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#312e2b">
+<link rel="icon" href="data:,">
 <title>Checards</title>
 <style>
 *{box-sizing:border-box}
@@ -60,10 +61,22 @@ body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-a
 .sq.spawn::after{content:'';position:absolute;inset:15%;border:2px dashed rgba(255,255,255,.8);border-radius:10%;animation:pulse 1.6s ease-in-out infinite;pointer-events:none}
 @keyframes pulse{50%{opacity:.3}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+@media(pointer:coarse){.btn{min-height:44px;padding:10px 14px}.tab-btn{min-height:44px}}
+@media(max-width:380px){.topbar{flex-wrap:wrap;gap:8px}.brand{font-size:17px}}
+@media(max-width:920px){.scrim{position:fixed;border-radius:0;z-index:20}.side{min-width:0}}
+@media(orientation:landscape) and (max-height:540px){
+  .layout{flex-direction:row;align-items:flex-start}
+  .board-col{flex:0 1 auto}
+  .board-wrap{max-width:calc(100dvh - 175px)}
+  .side{position:static;flex:1 1 240px;min-width:230px;max-width:none}
+}
+.sq:focus-visible{outline:3px solid #fff;outline-offset:-3px;box-shadow:inset 0 0 0 3px rgba(0,0,0,.55)}
+.cbtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.moves-foot .btn{font-size:12px}
 .sq .cr,.sq .cf{position:absolute;font-size:max(9px,calc(var(--sq)*.13));font-style:normal;font-weight:650;pointer-events:none;z-index:2}
 .sq .cr{top:2px;left:3px} .sq .cf{bottom:1px;right:3px}
-.sq.l .cr,.sq.l .cf{color:#6d8f4e}
-.sq.d .cr,.sq.d .cf{color:#e9e7c9}
+.sq.l .cr,.sq.l .cf{color:#556c38}
+.sq.d .cr,.sq.d .cf{color:#f4f2dc}
 
 .pc{position:relative;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;
   font-size:calc(var(--sq)*.155);width:2.3em;height:3.2em;border-radius:.32em;
@@ -96,8 +109,8 @@ body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-a
 
 .btn{background:#3b3833;border:1px solid #4d4841;color:var(--text);border-radius:7px;padding:8px 13px;font-size:13px;font-family:inherit;cursor:pointer}
 .btn:hover{background:#474239}
-.btn.primary{background:var(--accent);border-color:var(--accent-d);color:#fff;font-weight:650}
-.btn.primary:hover{background:#8fc45a}
+.btn.primary{background:#4f7f31;border-color:#457029;color:#fff;font-weight:700}
+.btn.primary:hover{background:#5c9440}
 .btn.ghost{background:transparent}
 .btn.big{padding:11px 16px;font-size:14px;width:100%}
 .btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -158,21 +171,21 @@ select{width:100%;background:#1f1d1a;color:var(--text);border:1px solid var(--li
     <div class="pbar" id="barTop"></div>
     <div class="board-wrap" id="boardWrap">
       <div class="board" id="board"></div>
-      <div class="chooser hidden" id="chooser"></div>
-      <div class="scrim hidden" id="draft"></div>
+      <div class="chooser hidden" id="chooser" role="dialog" aria-label="Choose which card moves"></div>
+      <div class="scrim hidden" id="draft" role="dialog" aria-modal="true" aria-label="Pick your next card"></div>
     </div>
     <div class="pbar" id="barBottom"></div>
-    <div class="status" id="status">Loading engine&hellip;</div>
+    <div class="status" id="status" aria-live="polite">Loading engine&hellip;</div>
     <div class="actions" id="actions"></div>
   </section>
   <aside class="side" id="sidePanel">
-    <div class="tabs">
-      <button class="tab-btn active" data-tab="moves" type="button">Moves</button>
-      <button class="tab-btn" data-tab="newgame" type="button">New game</button>
-      <button class="tab-btn" data-tab="help" type="button">Help</button>
+    <div class="tabs" role="tablist">
+      <button class="tab-btn active" data-tab="moves" type="button" role="tab" id="tab-moves" aria-selected="true" aria-controls="pane-moves">Moves</button>
+      <button class="tab-btn" data-tab="newgame" type="button" role="tab" id="tab-newgame" aria-selected="false" aria-controls="pane-newgame" tabindex="-1">New game</button>
+      <button class="tab-btn" data-tab="help" type="button" role="tab" id="tab-help" aria-selected="false" aria-controls="pane-help" tabindex="-1">Help</button>
     </div>
-    <div class="tab-pane active" id="pane-moves">
-      <div class="moves" id="log"></div>
+    <div class="tab-pane active" id="pane-moves" role="tabpanel" aria-labelledby="tab-moves">
+      <div class="moves" id="log" role="log" aria-label="Move list"><div class="muted" id="logEmpty">Moves will appear here once the game starts.</div></div>
       <div class="scout" id="scout"></div>
       <div class="moves-foot">
         <button class="btn" id="dl" type="button">Download log (JSON)</button>
@@ -180,10 +193,10 @@ select{width:100%;background:#1f1d1a;color:var(--text);border:1px solid var(--li
         <div class="muted" id="saved"></div>
       </div>
     </div>
-    <div class="tab-pane" id="pane-newgame">
+    <div class="tab-pane" id="pane-newgame" role="tabpanel" aria-labelledby="tab-newgame">
       <form id="setupForm" onsubmit="return false">
         <div class="frow"><label for="model">Opponent</label>
-          <select id="model"><option value="patient:/models/champion-it32.bin">Champion (it32: patient strategy + deep-target net)</option><option value="patient:/models/champion-it31.bin">it31 (patient strategy + hybrid-trained net)</option><option value="patient:/models/champion-it29.bin">it30 (patient strategy + it29 net)</option><option value="/models/champion-it29.bin">it29 (search only)</option><option value="/models/champion-it28.bin">it28 (~4940 games)</option><option value="/models/cq-3000.bin">3000-game checkpoint</option><option value="/models/your-net.bin">Your net (checards_model.bin)</option><option value="/models/old-champion.bin">Old champion (cycle 4)</option></select></div>
+          <select id="model"><optgroup label="Pick a difficulty"><option value="/models/cq-3000.bin">Easy</option><option value="/models/champion-it28.bin">Normal</option><option value="patient:/models/champion-it32.bin" selected>Hard - reigning champion</option></optgroup><optgroup label="All opponents (advanced)"><option value="patient:/models/champion-it32.bin">Champion (it32: patient strategy + deep-target net)</option><option value="patient:/models/champion-it31.bin">it31 (patient strategy + hybrid-trained net)</option><option value="patient:/models/champion-it29.bin">it29 (patient strategy)</option><option value="/models/champion-it29.bin">it29 (search only)</option><option value="/models/champion-it28.bin">it28 (~4940 games)</option><option value="/models/cq-3000.bin">3000-game checkpoint</option><option value="/models/your-net.bin">Your net (checards_model.bin)</option><option value="/models/old-champion.bin">Old champion (cycle 4)</option></select></div>
         <div class="frow"><label for="iters">Strength</label>
           <select id="iters"><option value="250" selected>Champion default (250 sims/move)</option><option value="60">Gate strength (60 sims/move)</option><option value="400">Strong (400)</option><option value="2000">Very strong (2000)</option></select></div>
         <div class="frow"><label for="side">You play</label>
@@ -192,7 +205,7 @@ select{width:100%;background:#1f1d1a;color:var(--text);border:1px solid var(--li
         <p class="muted">Starts a fresh game. Finished games stay saved in this browser.</p>
       </form>
     </div>
-    <div class="tab-pane help" id="pane-help">
+    <div class="tab-pane help" id="pane-help" role="tabpanel" aria-labelledby="tab-help">
       <h3>Goal</h3>
       <p>Destroy both enemy Aces. If a long stretch passes with no combat, the game is a draw.</p>
       <h3>Your cards</h3>
@@ -231,15 +244,17 @@ select{width:100%;background:#1f1d1a;color:var(--text);border:1px solid var(--li
 </main>
 <script>/*ENGINE*/</script>
 <script>
-let M,S,sel=null,gameId=null,aiBusy=false,pendingDest=null,lastMove=null,lastCombat=[],logSeen=0;
+let M,S,sel=null,gameId=null,aiBusy=false,pendingDest=null,lastMove=null,lastCombat=[],logSeen=0,focusSq=null;
+const reducedMotion=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
 const RES={1:'Red wins',2:'Black wins',3:'Draw - mutual destruction',4:'Draw - no combat for a long stretch',5:'Stopped - move limit reached'};
 const $=id=>document.getElementById(id);
 const st=()=>JSON.parse(M.UTF8ToString(M._cg_state()));
 const cell=(x,y)=>S.board[x*7+y];
 const GLYPH={D:'\u2666',H:'\u2665',C:'\u2663',S:'\u2660'};
-const prettyName=n=>n=='Jkr*'?'Joker':n;
+const safeName=n=>/^[A-Za-z0-9*]{1,5}$/.test(n)?n:'?';
+const prettyName=n=>{n=safeName(n);return n=='Jkr*'?'Joker':n};
 function faceHtml(name,cls,owner,rev){
-  cls=cls||'';
+  name=safeName(name);cls=cls||'';
   if(name=='Jkr*'){const o=owner===0?'jk-r':'jk-b';return `<span class="pc jk ${o} ${cls}"><span class="rk">\u2605</span><span class="lbl">JOKER</span>${rev?'<span class="eye">\ud83d\udc41\ufe0f</span>':''}</span>`}
   const su=name.slice(-1),rk=name.slice(0,-1);
   const red=su=='D'||su=='H';
@@ -273,13 +288,27 @@ function renderBoard(){
       if(dests.has(x+','+y)){cl.push('dest');if(cards.length)cl.push('occ')}
       if(spawns.has(x+','+y))cl.push('spawn');
       if(setup&&!cards.length&&((S.human==0&&y<=2)||(S.human==1&&y>=4)))cl.push('dest');
-      html+=`<div class="${cl.join(' ')}" data-x="${x}" data-y="${y}" role="button" aria-label="square ${x},${y}">`;
+      const tab=(focusSq?focusSq[0]==x&&focusSq[1]==y:(r==6&&x==0))?0:-1;
+      html+=`<div class="${cl.join(' ')}" data-x="${x}" data-y="${y}" role="button" tabindex="${tab}" aria-label="${sqLabel(x,y,cards,cl)}">`;
       if(x==0)html+=`<i class="cr">${y}</i>`;
       if(r==6)html+=`<i class="cf">${x}</i>`;
       if(cards.length){html+='<div class="stack">'+cards.map(cardHtml).join('')+'</div>';if(cards.length>1)html+=`<b class="n">${cards.length}</b>`}
       html+='</div>';
     }}
   $('board').innerHTML=html}
+
+function sqLabel(x,y,cards,cl){
+  let s='Square '+x+','+y+'. ';
+  if(!cards.length)s+='Empty. ';
+  else{const mine=cards.filter(c=>c.owner==S.human),foe=cards.filter(c=>c.owner!=S.human);
+    const nm=c=>c.name?prettyName(c.name):'face-down card';
+    if(mine.length)s+='Your '+mine.map(nm).join(', ')+'. ';
+    if(foe.length)s+='Enemy '+foe.map(nm).join(', ')+'. '}
+  if(cl.includes('sel'))s+='Selected. ';
+  if(cl.includes('dest'))s+=S.phase=='setup_place'?'You can place a card here. ':'Legal move. ';
+  if(cl.includes('spawn'))s+='Draw a card here. ';
+  if(cl.includes('combat'))s+='Site of the last battle. ';
+  return s}
 
 function renderBars(){
   const h=S.human,ai=1-h;
@@ -306,7 +335,7 @@ function renderScout(){
   const seen=new Set(D[ai]);
   for(const t of S.board)for(const c of t)if(c.owner==ai&&c.name)seen.add(c.name);
   const unseen=DECK(ai).filter(n=>!seen.has(n));
-  el.innerHTML=`<details><summary>AI cards not yet seen (${unseen.length})</summary><div class="list">${unseen.map(n=>faceHtml(n,'xs',ai)).join('')}</div></details>`}
+  el.innerHTML=`<details><summary title="Cards the AI has never revealed - still hidden on the board or in its draw pile">AI cards you haven't seen yet (${unseen.length})</summary><div class="list">${unseen.map(n=>faceHtml(n,'xs',ai)).join('')}</div></details>`}
 
 function renderStatus(){
   let h='';const over=S.phase=='over';
@@ -316,7 +345,8 @@ function renderStatus(){
     h=`<span><b>Setup - ${n} of 7 placed.</b> Choose which card to place next; the rest stay in your draw pile.</span>`}
   else if(S.phase=='play'){const mine=S.mover==S.human;
     if(mine){const spawnOk=S.legal.some(a=>a.spawn);
-      h=`<span class="tdot"></span><span><b>Your turn</b> - ${S.movesRemaining} of 3 moves left.${spawnOk?' Or tap a glowing square on your back row to draw a card (ends your turn).':''}</span>`}
+      const hint=sel?' Tap a highlighted square to move it.':(spawnOk?' Tap one of your cards, then a highlighted square - or tap a glowing back-row square to draw a card (ends your turn).':' Tap one of your cards, then tap a highlighted square to move it.');
+      h=`<span class="tdot"></span><span><b>Your turn</b> - ${S.movesRemaining} of 3 moves left.${hint}</span>`}
     else h=`<span class="spin"></span><span>AI is thinking&hellip;</span>`}
   else if(over){h=`<span><b>Game over - ${RES[S.result]}</b></span>`}
   $('status').innerHTML=h;
@@ -341,7 +371,8 @@ function renderChooser(){
     b.innerHTML=faceHtml(c.card,'big',S.human)+`<span class="nm">${prettyName(c.card)}</span>`;
     b.onclick=()=>act(c.i);cs.appendChild(b)});
   C.querySelector('.btn').onclick=()=>{pendingDest=null;render()};
-  C.classList.remove('hidden')}
+  C.classList.remove('hidden');
+  const firstC=C.querySelector('.cbtn');if(firstC)firstC.focus()}
 
 function renderDraft(){
   const D=$('draft');
@@ -351,11 +382,14 @@ function renderDraft(){
   S.pool.forEach((c,i)=>{const b=document.createElement('button');b.type='button';b.className='cbtn';
     b.innerHTML=faceHtml(c,'big',S.human)+`<span class="nm">${prettyName(c)}</span>`;
     b.onclick=()=>{M._cg_draft(i);render();maybeAI()};dc.appendChild(b)});
-  D.classList.remove('hidden')}
+  D.classList.remove('hidden');
+  const first=dc.querySelector('.cbtn');if(first)first.focus()}
 
 function render(){
   S=st();setSq();
-  renderBoard();renderBars();renderStatus();renderActions();renderChooser();renderDraft();renderScout()}
+  const refocus=focusSq&&!pendingDest&&S.phase!='setup_draft'&&$('board').contains(document.activeElement);
+  renderBoard();renderBars();renderStatus();renderActions();renderChooser();renderDraft();renderScout();
+  if(refocus){const t=document.querySelector(`[data-x="${focusSq[0]}"][data-y="${focusSq[1]}"]`);if(t)t.focus()}}
 
 function click(x,y){
   if(!S)return;
@@ -379,12 +413,15 @@ function maybeAI(){S=st();
   else if(S.phase=='play'&&S.mover==S.human){syncLog();save()}
   else if(S.phase=='over'){syncLog();save();render()}}
 
+// NOTE: lastCombat intentionally persists until the next battle (or new game) -
+// the red ring marks the site of the most recent battle rather than clearing on
+// the next action as main's did. Deliberate UX choice from the redesign.
 function syncLog(){
   const L=JSON.parse(M.UTF8ToString(M._cg_log()));
   for(;logSeen<L.length;logSeen++){const ev=L[logSeen];
     if(ev.ev=='act'){lastMove={from:ev.a.from,to:ev.a.to};if(ev.combat&&ev.combat.length)lastCombat=ev.combat}
     else if(ev.ev=='pass'){lastMove=null;if(ev.combat&&ev.combat.length)lastCombat=ev.combat}
-    const d=describe(ev);if(d)$('log').insertAdjacentHTML('beforeend',d)}
+    const d=describe(ev);if(d){const pe=$('logEmpty');if(pe)pe.remove();$('log').insertAdjacentHTML('beforeend',d)}}
   const lg=$('log');lg.scrollTop=lg.scrollHeight}
 
 function describe(ev){
@@ -404,21 +441,53 @@ function savePrefs(){try{localStorage.setItem('checardsUI',JSON.stringify({model
 function loadPrefs(){try{const p=JSON.parse(localStorage.getItem('checardsUI')||'null');if(!p)return;for(const k of ['model','iters','side'])if(p[k]&&$(k).querySelector(`option[value="${p[k]}"]`))$(k).value=p[k]}catch(e){}}
 
 function newGame(){
-  gameId=new Date().toISOString();logSeen=0;$('log').innerHTML='';sel=null;pendingDest=null;lastMove=null;lastCombat=[];
+  gameId=new Date().toISOString();logSeen=0;$('log').innerHTML='<div class="muted" id="logEmpty">Moves will appear here once the game starts.</div>';sel=null;pendingDest=null;lastMove=null;lastCombat=[];
   savePrefs();
   const seed=(Math.random()*4e9)>>>0;
   M.ccall('cg_new','number',['string','number','number','number'],[$('model').value,+$('side').value,+$('iters').value,seed]);
   syncLog();render();maybeAI()}
 
 function showTab(name){
-  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab==name));
+  document.querySelectorAll('.tab-btn').forEach(b=>{const on=b.dataset.tab==name;b.classList.toggle('active',on);b.setAttribute('aria-selected',on);b.tabIndex=on?0:-1});
   document.querySelectorAll('.tab-pane').forEach(p=>p.classList.toggle('active',p.id=='pane-'+name))}
+document.querySelector('.tabs').addEventListener('keydown',e=>{
+  if(e.key!='ArrowLeft'&&e.key!='ArrowRight')return;
+  const bs=[...document.querySelectorAll('.tab-btn')];
+  let i=bs.indexOf(document.activeElement);if(i<0)return;
+  i=(i+(e.key=='ArrowRight'?1:bs.length-1))%bs.length;
+  bs[i].focus();showTab(bs[i].dataset.tab)});
 
-$('board').addEventListener('click',e=>{const sq=e.target.closest('.sq');if(sq)click(+sq.dataset.x,+sq.dataset.y)});
+$('board').addEventListener('click',e=>{const sq=e.target.closest('.sq');if(sq){focusSq=[+sq.dataset.x,+sq.dataset.y];click(+sq.dataset.x,+sq.dataset.y)}});
+$('board').addEventListener('keydown',e=>{
+  const sq=e.target.closest('.sq');if(!sq||!S)return;
+  const x=+sq.dataset.x,y=+sq.dataset.y,hr=S.human==0;
+  let nx=x,ny=y;
+  if(e.key=='ArrowLeft')nx=x-1;else if(e.key=='ArrowRight')nx=x+1;
+  else if(e.key=='ArrowUp')ny=hr?y+1:y-1;else if(e.key=='ArrowDown')ny=hr?y-1:y+1;
+  else if(e.key=='Enter'||e.key==' '){e.preventDefault();focusSq=[x,y];click(x,y);return}
+  else if(e.key=='Escape'){sel=null;pendingDest=null;render();return}
+  else return;
+  e.preventDefault();
+  if(nx<0||nx>6||ny<0||ny>6)return;
+  focusSq=[nx,ny];
+  document.querySelectorAll('.sq').forEach(s2=>s2.tabIndex=-1);
+  const t=document.querySelector(`[data-x="${nx}"][data-y="${ny}"]`);
+  if(t){t.tabIndex=0;t.focus()}});
+document.addEventListener('keydown',e=>{
+  if(e.key!='Escape')return;
+  if(!$('chooser').classList.contains('hidden')){pendingDest=null;render()}});
+function trapTab(dlg,e){
+  if(e.key!='Tab')return;
+  const bs=[...dlg.querySelectorAll('button')];if(!bs.length)return;
+  const i=bs.indexOf(document.activeElement);
+  if(e.shiftKey&&i<=0){e.preventDefault();bs[bs.length-1].focus()}
+  else if(!e.shiftKey&&i==bs.length-1){e.preventDefault();bs[0].focus()}}
+$('draft').addEventListener('keydown',e=>trapTab($('draft'),e));
+$('chooser').addEventListener('keydown',e=>trapTab($('chooser'),e));
 document.querySelectorAll('.tab-btn').forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
-$('helpBtn').onclick=()=>{showTab('help');if(innerWidth<=920)$('sidePanel').scrollIntoView({behavior:'smooth'})};
-$('newgTop').onclick=()=>{showTab('newgame');if(innerWidth<=920)$('sidePanel').scrollIntoView({behavior:'smooth'})};
-$('newg').onclick=()=>{showTab('moves');newGame();if(innerWidth<=920)$('boardWrap').scrollIntoView({behavior:'smooth'})};
+$('helpBtn').onclick=()=>{showTab('help');if(innerWidth<=920)$('sidePanel').scrollIntoView({behavior:reducedMotion()?'auto':'smooth'})};
+$('newgTop').onclick=()=>{showTab('newgame');if(innerWidth<=920)$('sidePanel').scrollIntoView({behavior:reducedMotion()?'auto':'smooth'})};
+$('newg').onclick=()=>{showTab('moves');newGame();if(innerWidth<=920)$('boardWrap').scrollIntoView({behavior:reducedMotion()?'auto':'smooth'})};
 $('dl').onclick=()=>download('checards-game-'+gameId+'.json',JSON.parse(M.UTF8ToString(M._cg_log())));
 $('dlall').onclick=()=>download('checards-all-games.json',JSON.parse(localStorage.getItem('checardsGames')||'{}'));
 window.addEventListener('resize',setSq);
