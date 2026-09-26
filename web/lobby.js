@@ -85,6 +85,7 @@ function open() {
   shell.classList.remove('hidden');
   const incoming = new URL(location.href).searchParams.get('room');
   if (incoming && parseCode(incoming)) { q('#mpJoinCode').value = parseCode(incoming); tab('join'); q('#mpJoinCode').focus(); }
+  else if (created && !q('#mpCreated').hidden) q('#mpClose').focus();
   else { tab(activeTab); q('#mpClose').focus(); }
 }
 function close() {
@@ -185,4 +186,14 @@ q('#mpJoinForm').addEventListener('submit', e => {
 });
 q('#mpRefresh').addEventListener('click', refresh);
 // A share URL preselects Join, but never claims a player seat without a click.
-if (parseCode(new URL(location.href).searchParams.get('room'))) open();
+if (parseCode(new URL(location.href).searchParams.get('room'))) {
+  // On a first visit the built-in tutorial may open after engine initialization.
+  // Wait for that dialog to close so the room invitation remains the active dialog.
+  const help = document.querySelector('#helpScrim');
+  if (help && !localStorage.getItem('checardsHelpSeen')) {
+    const observer = new MutationObserver(() => {
+      if (help.classList.contains('hidden') && localStorage.getItem('checardsHelpSeen')) { observer.disconnect(); open(); }
+    });
+    observer.observe(help, {attributes:true,attributeFilter:['class']});
+  } else open();
+}
