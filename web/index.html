@@ -12,6 +12,7 @@ var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('co
 </script>
 <link rel="icon" href="data:,">
 <title>Checards</title>
+<link rel="stylesheet" href="./lobby.css">
 <style>
 *{box-sizing:border-box}
 :root{
@@ -398,7 +399,7 @@ let M,S,sel=null,gameId=null,aiBusy=false,pendingDest=null,lastMove=null,lastCom
 const reducedMotion=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
 const RES={1:'Red wins',2:'Black wins',3:'Draw - mutual destruction',4:'Draw - no combat for a long stretch',5:'Stopped - move limit reached'};
 const $=id=>document.getElementById(id);
-const st=()=>JSON.parse(M.UTF8ToString(M._cg_state()));
+const st=()=>onlineGame?onlineView:JSON.parse(M.UTF8ToString(M._cg_state()));
 const cell=(x,y)=>S.board[x*7+y];
 const GLYPH={D:'\u2666',H:'\u2665',C:'\u2663',S:'\u2660'};
 const safeName=n=>/^[A-Za-z0-9*]{1,5}$/.test(n)?n:'?';
@@ -558,7 +559,7 @@ function backHtml(owner,cls){return `<span class="pc back ${owner===0?'br':'bb'}
 function cardHtml(c){if(!c.name)return backHtml(c.owner);return faceHtml(c.name,'',c.owner,!!c.revealed)}
 const DECK=f=>{const su=f==0?['D','H']:['C','S'];const d=['Jkr*','A'+su[0],'A'+su[1]];for(const r of ['9','10','J','Q','K'])for(const x of su)d.push(r+x);return d};
 function mySetupCount(){let n=0;for(const t of S.board)for(const c of t)if(c.owner==S.human)n++;return n}
-function deadCards(){const D=[[],[]];let L=[];try{L=JSON.parse(M.UTF8ToString(M._cg_log()))}catch(e){}
+function deadCards(){if(onlineGame)return [[],[]];const D=[[],[]];let L=[];try{L=JSON.parse(M.UTF8ToString(M._cg_log()))}catch(e){}
   for(const ev of L)for(const c of (ev.combat||[])){const a=c.attacker,d=1-a;if(c.attackerDied)c.att.forEach(n=>D[a].push(n));if(c.defenderDied)c.def.forEach(n=>D[d].push(n))}
   return D}
 function setSq(){const w=$('board').clientWidth;if(w)document.documentElement.style.setProperty('--sq',(w/7)+'px')}
@@ -567,10 +568,10 @@ function renderBoard(){
   const hr=S.human==0;
   const combatSq=new Set(lastCombat.map(e=>e.at.join(',')));
   const dests=new Set();
-  if(sel)for(const a of S.legal)if(!a.spawn&&a.from[0]==sel[0]&&a.from[1]==sel[1])dests.add(a.to.join(','));
+  if(sel&&!onlinePending)for(const a of S.legal)if(!a.spawn&&a.from[0]==sel[0]&&a.from[1]==sel[1])dests.add(a.to.join(','));
   const spawns=new Set();
-  if(S.phase=='play'&&S.mover==S.human&&!sel)for(const a of S.legal)if(a.spawn)spawns.add(a.to.join(','));
-  const setup=S.phase=='setup_place';
+  if(S.phase=='play'&&S.mover==S.human&&!onlinePending&&!sel)for(const a of S.legal)if(a.spawn)spawns.add(a.to.join(','));
+  const setup=S.phase=='setup_place'&&!onlinePending&&onlineConnected;
   let html='';
   for(let r=0;r<7;r++){const y=hr?6-r:r;
     for(let x=0;x<7;x++){
@@ -606,35 +607,41 @@ function sqLabel(x,y,cards,cl){
   return s}
 
 function renderBars(){
-  const h=S.human,ai=1-h;
+  const h=S.human,ai=h<0?1:1-h;
+  const hb=h<0?0:h;
   const D=deadCards();
-  const modelShort=$('model').selectedOptions[0].textContent.split('(')[0].trim();
+  const modelShort=onlineGame?'Opponent':$('model').selectedOptions[0].textContent.split('(')[0].trim();
   $('barTop').innerHTML=
     `<span class="avatar ${ai==0?'fr':'fb'}">${ai==0?'\u2665':'\u2660'}</span>`+
-    `<div class="who"><div class="nm">${modelShort}</div><div class="sub">${$('iters').value} sims per move</div></div>`+
+    `<div class="who"><div class="nm">${modelShort}</div><div class="sub">${onlineGame?(onlinePresence?(onlinePresence[ai===0?'redOnline':'blackOnline']?'Online':'Offline'):'Connecting...'):$('iters').value+' sims per move'}</div></div>`+
     `<div class="sp"></div>`+
-    `<div class="dead" title="Cards the AI has lost">${D[ai].map(n=>faceHtml(n,'xs',ai)).join('')}</div>`+
-    `<div class="pile" title="AI draw pile">${backHtml(ai,'xs')}<span>&times;${S.draw[ai]}</span></div>`;
+    `<div class="dead" title="Cards the opponent has lost">${D[ai].map(n=>faceHtml(n,'xs',ai)).join('')}</div>`+
+    `<div class="pile" title="Opponent draw pile">${backHtml(ai,'xs')}<span>&times;${S.draw[ai]}</span></div>`;
   $('barBottom').innerHTML=
-    `<span class="avatar ${h==0?'fr':'fb'}">${h==0?'\u2665':'\u2660'}</span>`+
-    `<div class="who"><div class="nm">You</div><div class="sub">${h==0?'Red - moves first':'Black - moves second'}</div></div>`+
+    `<span class="avatar ${hb==0?'fr':'fb'}">${hb==0?'\u2665':'\u2660'}</span>`+
+    `<div class="who"><div class="nm">${h===-1?'Red':'You'}</div><div class="sub">${h===-1?'Watching':h==0?'Red - moves first':'Black - moves second'}</div></div>`+
     `<div class="sp"></div>`+
-    `<div class="dead" title="Cards you have lost">${D[h].map(n=>faceHtml(n,'xs',h)).join('')}</div>`+
-    `<div class="pile" title="Your draw pile">${backHtml(h,'xs')}<span>&times;${S.draw[h]}</span></div>`}
+    `<div class="dead" title="Cards this side has lost">${D[hb].map(n=>faceHtml(n,'xs',hb)).join('')}</div>`+
+    `<div class="pile" title="Draw pile">${backHtml(hb,'xs')}<span>&times;${S.draw[hb]}</span></div>`}
 
 function renderScout(){
   const el=$('scout');
-  if(S.phase!='play'){el.innerHTML='';return}
+  if(S.phase!='play'||S.human<0||onlineGame){el.innerHTML='';return}
   const ai=1-S.human;
   const D=deadCards();
   const seen=new Set(D[ai]);
   for(const t of S.board)for(const c of t)if(c.owner==ai&&c.name)seen.add(c.name);
   const unseen=DECK(ai).filter(n=>!seen.has(n));
-  el.innerHTML=`<details><summary title="Cards the AI has never revealed - still hidden on the board or in its draw pile">AI cards you haven't seen yet (${unseen.length})</summary><div class="list">${unseen.map(n=>faceHtml(n,'xs',ai)).join('')}</div></details>`}
+  el.innerHTML=`<details><summary title="Cards the opponent has never revealed - still hidden on the board or in its draw pile">${onlineGame?'Opponent':'AI'} cards you haven't seen yet (${unseen.length})</summary><div class="list">${unseen.map(n=>faceHtml(n,'xs',ai)).join('')}</div></details>`}
 
 function renderStatus(){
   let h='';const over=S.phase=='over';
-  if(S.phase=='setup_place'){const n=mySetupCount();
+  if(onlineGame&&!onlineConnected)h=onlineClosed?`<span>${escapeText(onlineError||'The room connection was closed.')}</span>`:'<span>Disconnected. Reconnecting to the room...</span>';
+  else if(onlineGame&&onlineError)h=`<span>${escapeText(onlineError)}</span>`;
+  else if(onlineGame&&onlinePending)h='<span class="spin"></span><span>Waiting for server...</span>';
+  else if(onlineGame&&S.human<0)h=`<span>Watching game - ${S.gamePhase==='setup'?'players are setting up':S.phase==='over'?RES[S.result]:'turn '+S.turn}</span>`;
+  else if(S.phase=='done')h='<span>Setup complete. Waiting for opponent to finish...</span>';
+  else if(S.phase=='setup_place'){const n=mySetupCount();
     h=`<span><b>Setup - card ${n+1} of 7.</b> Place your ${faceHtml(S.pending,'sm',S.human)} on a highlighted square in your home rows.</span>`}
   else if(S.phase=='setup_draft'){const n=mySetupCount();
     h=`<span><b>Setup - ${n} of 7 placed.</b> Choose which card to place next; the rest stay in your draw pile.</span>`}
@@ -642,21 +649,22 @@ function renderStatus(){
     if(mine){const spawnOk=S.legal.some(a=>a.spawn);
       const hint=sel?' Tap a highlighted square to move it.':(spawnOk?' Tap one of your cards, then a highlighted square - or tap a glowing back-row square to draw a card (ends your turn).':' Tap one of your cards, then tap a highlighted square to move it.');
       h=`<span class="tdot"></span><span><b>Your turn</b> - ${S.movesRemaining} of 3 moves left.${hint}</span>`}
-    else h=`<span class="spin"></span><span>AI is thinking&hellip;</span>`}
+    else h=`<span class="spin"></span><span>${onlineGame?'Opponent is playing':'AI is thinking&hellip;'}</span>`}
   else if(over){h=`<span><b>Game over - ${RES[S.result]}</b></span>`}
   $('status').innerHTML=h;
   $('status').classList.toggle('over',over)}
 
 function renderActions(){
   const A=$('actions');A.innerHTML='';
-  if(S.phase=='play'&&S.mover==S.human&&S.legal.length==0){
+  if(S.phase=='play'&&S.mover==S.human&&S.legal.length==0&&!onlinePending&&onlineConnected){
     const b=document.createElement('button');b.className='btn';b.textContent='No legal action - pass';b.onclick=()=>act(0);A.appendChild(b)}
-  if(S.phase=='over'){
-    const b=document.createElement('button');b.className='btn primary';b.textContent='Play again';b.onclick=()=>newGame();A.appendChild(b)}}
+  if(S.phase=='over'&&!onlineGame){
+    const b=document.createElement('button');b.className='btn primary';b.textContent='Play again';b.onclick=()=>newGame();A.appendChild(b)}
+  if(onlineGame&&S.human>=0&&S.phase!='over'){const b=document.createElement('button');b.className='btn';b.textContent='Resign';b.disabled=!onlineConnected||onlinePending;b.onclick=()=>{if(confirm('Resign this game? This cannot be undone.'))sendOnline({t:'resign'})};A.appendChild(b)}}
 
 function renderChooser(){
   const C=$('chooser');
-  if(!(pendingDest&&sel&&S.phase=='play')){C.classList.add('hidden');C.innerHTML='';return}
+  if(!(pendingDest&&sel&&S.phase=='play'&&!onlinePending&&onlineConnected)){C.classList.add('hidden');C.innerHTML='';return}
   const cands=[];
   S.legal.forEach((a,i)=>{if(!a.spawn&&a.from[0]==sel[0]&&a.from[1]==sel[1]&&a.to[0]==pendingDest[0]&&a.to[1]==pendingDest[1])cands.push({i,card:a.card})});
   if(!cands.length){pendingDest=null;C.classList.add('hidden');C.innerHTML='';return}
@@ -676,19 +684,20 @@ function renderDraft(){
   const dc=D.querySelector('.draft-cards');
   S.pool.forEach((c,i)=>{const b=document.createElement('button');b.type='button';b.className='cbtn';
     b.innerHTML=faceHtml(c,'big',S.human)+`<span class="nm">${prettyName(c)}</span>`;
-    b.onclick=()=>{M._cg_draft(i);render();maybeAI()};dc.appendChild(b)});
+    b.onclick=()=>{if(onlineGame)sendOnline({t:'draft',idx:i});else{M._cg_draft(i);render();maybeAI()}};b.disabled=!!onlinePending;dc.appendChild(b)});
   D.classList.remove('hidden');
   const first=dc.querySelector('.cbtn');if(first)first.focus()}
 
 function render(){
-  S=st();setSq();
+  S=st();if(!S)return;setSq();
   const refocus=focusSq&&!pendingDest&&S.phase!='setup_draft'&&$('board').contains(document.activeElement);
   renderBoard();renderBars();renderStatus();renderActions();renderChooser();renderDraft();renderScout();
   if(refocus){const t=document.querySelector(`[data-x="${focusSq[0]}"][data-y="${focusSq[1]}"]`);if(t)t.focus()}}
 
 function click(x,y){
-  if(!S)return;
+  if(!S||onlineGame&&(!onlineConnected||onlinePending||S.human<0))return;
   if(S.phase=='setup_place'){
+    if(onlineGame){if(!((S.human==0&&y<=2)||(S.human==1&&y>=4))||cell(x,y).length)return;sendOnline({t:'place',x,y});return}
     if(!M._cg_place(x,y)){$('status').innerHTML='<span>That square is not available - pick a highlighted empty square in your home rows.</span>';return}
     render();maybeAI();return}
   if(S.phase!='play'||S.mover!=S.human)return;
@@ -701,7 +710,7 @@ function click(x,y){
   sel=S.legal.some(a=>!a.spawn&&a.from[0]==x&&a.from[1]==y)?[x,y]:null;
   render()}
 
-function act(i){pendingDest=null;sel=null;M._cg_human_act(i);syncLog();save();render();maybeAI()}
+function act(i){pendingDest=null;sel=null;if(onlineGame){sendOnline({t:'act',idx:i});return}M._cg_human_act(i);syncLog();save();render();maybeAI()}
 
 function maybeAI(){S=st();
   if(S.phase=='play'&&S.mover!=S.human&&!aiBusy){aiBusy=true;setTimeout(()=>{M._cg_ai_step();aiBusy=false;syncLog();save();render();maybeAI()},350)}
@@ -736,6 +745,7 @@ function savePrefs(){try{localStorage.setItem('checardsUI',JSON.stringify({model
 function loadPrefs(){try{const p=JSON.parse(localStorage.getItem('checardsUI')||'null');if(!p)return;for(const k of ['model','iters','side'])if(p[k]&&$(k).querySelector(`option[value="${p[k]}"]`))$(k).value=p[k]}catch(e){}}
 
 function newGame(){
+  if(onlineGame)detachOnline();
   gameId=new Date().toISOString();logSeen=0;$('log').innerHTML='<div class="muted" id="logEmpty">Moves will appear here once the game starts.</div>';sel=null;pendingDest=null;lastMove=null;lastCombat=[];
   savePrefs();
   const seed=(Math.random()*4e9)>>>0;
@@ -789,7 +799,7 @@ $('helpScrim').addEventListener('click',e=>{if(e.target===$('helpScrim'))closeHe
 $('helpScrim').addEventListener('keydown',e=>trapTab($('helpScrim'),e));
 $('newgTop').onclick=()=>{showTab('newgame');if(innerWidth<=920)$('sidePanel').scrollIntoView({behavior:reducedMotion()?'auto':'smooth'})};
 $('newg').onclick=()=>{showTab('moves');newGame();if(innerWidth<=920)$('boardWrap').scrollIntoView({behavior:reducedMotion()?'auto':'smooth'})};
-$('dl').onclick=()=>download('checards-game-'+gameId+'.json',JSON.parse(M.UTF8ToString(M._cg_log())));
+$('dl').onclick=()=>{if(onlineGame)return;download('checards-game-'+gameId+'.json',JSON.parse(M.UTF8ToString(M._cg_log())))};
 $('dlall').onclick=()=>download('checards-all-games.json',JSON.parse(localStorage.getItem('checardsGames')||'{}'));
 window.addEventListener('resize',setSq);
 
@@ -820,8 +830,64 @@ try{matchMedia('(prefers-color-scheme: dark)').addEventListener('change',e=>{
   if(stored!='light'&&stored!='dark')applyTheme(e.matches?'dark':'light')})}catch(e){}
 applyTheme(currentTheme());
 
+
+// Multiplayer game wiring contract for web/net.js and the lobby:
+// window.ChecardsNet: on('state', cb(view)), on('presence', cb(payload)),
+// on('error', cb(msg)), send({t:'place',x,y}|{t:'draft',idx}|
+// {t:'act',idx}|{t:'resign'}), role and room from welcome. The lobby's
+// `checards:room-selected` event {room,role,token,session} activates this mode.
+// State is solely the server's perspective-filtered snapshot. The server owns
+// legal indices, setup, and turn resolution; this UI never runs local AI online.
+let onlineGame=null,onlineView=null,onlinePresence=null,onlinePending=false,
+    onlineConnected=true,onlineClosed=false,onlineError='',onlineSeq=0;
+const escapeText=x=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function sendOnline(msg){
+  if(!onlineGame||!onlineConnected||onlinePending)return;
+  onlinePending=true;onlineError='';render();
+  try{onlineGame.send(msg)}catch(e){onlinePending=false;onlineError='Could not send action. Reconnect and try again.';render()}
+}
+function attachOnline(net){
+  if(!net||typeof net.on!=='function'||typeof net.send!=='function')throw Error('A connected room client is required');
+  const seq=++onlineSeq;onlineGame=net;onlineView=null;onlinePresence=null;
+  onlinePending=false;onlineConnected=!net.status||net.status==='connected';onlineClosed=net.status==='closed';onlineError='';sel=null;pendingDest=null;
+  lastMove=null;lastCombat=[];gameId=null;logSeen=0;
+  $('log').innerHTML='<div class="muted" id="logEmpty">Waiting for server...</div>';
+  $('dl').closest('.moves-foot').classList.add('hidden');
+  const current=()=>seq===onlineSeq&&onlineGame===net;
+  net.on('state',view=>{
+    if(!current())return;
+    view=view?.view||view;
+    if(!view||!Array.isArray(view.board))return;
+    const previous=onlineView;
+    onlineView={...view,human:view.you};onlinePending=false;onlineError='';
+    if(previous&&previous!==view){sel=null;pendingDest=null}
+    if(Array.isArray(view.events)&&view.events.length)lastCombat=view.events;
+    const label=view.phase==='over'?`Game over - ${RES[view.result]||'finished'}`:
+      view.gamePhase==='setup'?'Both players place seven cards before play begins.':
+      `Turn ${view.turn} - ${view.mover===view.you?'your move':view.mover===0?'Red':'Black'}${view.mover===view.you?'':' to move'}.`;
+    $('log').innerHTML=`<div class="muted">${label}</div>`;
+    render();
+  });
+  net.on('presence',p=>{if(!current())return;onlinePresence=p;if(onlineView)render()});
+  net.on('error',e=>{if(!current())return;onlinePending=false;onlineError=typeof e==='string'?e:e?.msg||'The server rejected that action.';if(onlineView)render()});
+  net.on('connection',s=>{if(!current())return;onlineConnected=s==='connected';onlineClosed=s==='closed';if(onlineConnected){onlinePending=false;onlineError=''}if(onlineView)render()});
+  if(net.presence)onlinePresence=net.presence;
+  if(net.view){onlineView={...net.view,human:net.view.you};render()}
+}
+function detachOnline(){
+  ++onlineSeq;onlineGame=null;onlineView=null;onlinePresence=null;
+  onlinePending=false;onlineConnected=true;onlineClosed=false;onlineError='';sel=null;pendingDest=null;
+  $('dl').closest('.moves-foot').classList.remove('hidden');
+  if(M)render();
+}
+window.ChecardsGame={attach:attachOnline,detach:detachOnline,get view(){return onlineView}};
+window.addEventListener('checards:room-selected',e=>{
+  const net=e.detail?.session||window.ChecardsNet;
+  if(net)attachOnline(net);
+});
+
 loadPrefs();
-CheckardsEngine().then(m=>{M=m;newGame();
+CheckardsEngine().then(m=>{M=m;if(!onlineGame)newGame();
   try{if(!localStorage.getItem('checardsHelpSeen')){openHelp();localStorage.setItem('checardsHelpSeen','1')}}catch(e){}
   const q=new URLSearchParams(location.search);if(q.get('autotest')){aiBusy=true;autotest(+q.get('autotest'))}});
 </script>
@@ -1045,4 +1111,6 @@ G.addEventListener('keydown',e=>{
 try{matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change',()=>startDemo())}catch(e){}
 show(0,false);
 })();
-</script></body></html>
+</script>
+<script type="module" src="./lobby.js"></script>
+</body></html>

@@ -233,10 +233,12 @@ export class GameRoom {
       server.accept();
 
       const token = url.searchParams.get('token') || '';
+      // Explicit spectator flag: spectating never consumes a player seat.
+      const watch = url.searchParams.get('spectate') === '1' || url.searchParams.get('side') === 'spec';
       let role = 'spec';
       if (token && meta.tokens.red === token) role = 'red';
       else if (token && meta.tokens.black === token) role = 'black';
-      else {
+      else if (!watch) {
         // unclaimed seat? first come first served for the open side
         const want = url.searchParams.get('side');
         if (!meta.tokens.red && want !== 'black') { role = 'red'; meta.tokens.red = crypto.randomUUID(); }
