@@ -85,6 +85,7 @@ body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-a
 .pc .rk{font-size:1em;margin-top:.08em}
 .pc .su{font-size:.92em;margin-top:.06em}
 .pc.rd{color:#c2332b}
+.pc.unk{color:#5a6b7d;background:linear-gradient(180deg,#fdfdf8,#eceadf)}
 .pc.jk .rk{font-size:1.3em}
 .pc.jk .lbl{font-size:.34em;letter-spacing:.06em;margin-top:.28em;font-weight:800}
 .pc.jk-r{color:#c2332b} .pc.jk-b{color:#33465e}
@@ -255,6 +256,7 @@ const safeName=n=>/^[A-Za-z0-9*]{1,5}$/.test(n)?n:'?';
 const prettyName=n=>{n=safeName(n);return n=='Jkr*'?'Joker':n};
 function faceHtml(name,cls,owner,rev){
   name=safeName(name);cls=cls||'';
+  if(!GLYPH[name.slice(-1)]&&name!='Jkr*')return `<span class="pc unk ${cls}"><span class="rk">?</span></span>`;
   if(name=='Jkr*'){const o=owner===0?'jk-r':'jk-b';return `<span class="pc jk ${o} ${cls}"><span class="rk">\u2605</span><span class="lbl">JOKER</span>${rev?'<span class="eye">\ud83d\udc41\ufe0f</span>':''}</span>`}
   const su=name.slice(-1),rk=name.slice(0,-1);
   const red=su=='D'||su=='H';
@@ -427,7 +429,7 @@ function syncLog(){
 function describe(ev){
   if(ev.ev=='act'){const mine=ev.mover==S.human;const who=mine?'You':'AI';const a=ev.a;let t;
     if(a.spawn)t=`<div class="mv"><b class="${mine?'you':'ai'}">${who}</b> drew ${mine&&ev.spawned?faceHtml(ev.spawned,'sm',ev.mover):'a card'} onto column ${a.to[0]}</div>`;
-    else t=`<div class="mv"><b class="${mine?'you':'ai'}">${who}</b> ${mine?faceHtml(a.card,'sm',ev.mover):''} (${a.from}) &rarr; (${a.to})</div>`;
+    else t=`<div class="mv"><b class="${mine?'you':'ai'}">${who}</b> ${mine&&a.card?faceHtml(a.card,'sm',ev.mover):''} (${a.from}) &rarr; (${a.to})</div>`;
     for(const c of (ev.combat||[]))t+=`<div class="mv cb">Combat at (${c.at}): ${c.att.map(n=>faceHtml(n,'sm',c.attacker)).join('')} vs ${c.def.map(n=>faceHtml(n,'sm',1-c.attacker)).join('')} - ${c.attackerDied&&c.defenderDied?'both sides destroyed':c.attackerDied?'attacker destroyed':'defender destroyed'}</div>`;
     return t}
   if(ev.ev=='pass')return `<div class="mv"><b class="${ev.mover==S.human?'you':'ai'}">${ev.mover==S.human?'You':'AI'}</b> had no legal action - turn passes</div>`;
