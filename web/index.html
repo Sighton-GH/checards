@@ -25,9 +25,7 @@ body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-a
 
 .topbar{display:flex;align-items:center;justify-content:space-between;padding:10px 18px;background:var(--panel);border-bottom:1px solid var(--line)}
 .brand{display:flex;align-items:center;font-size:19px;font-weight:700;letter-spacing:.4px}
-.logo{position:relative;width:24px;height:17px;display:inline-block;margin-right:9px}
-.logo i{position:absolute;top:0;left:0;width:12px;height:17px;border-radius:2px;background:var(--red)}
-.logo i+i{left:11px;background:var(--navy);box-shadow:0 0 0 1px rgba(0,0,0,.35)}
+.logo{display:inline-block;margin-right:9px;border-radius:6px;flex:0 0 auto}
 .top-actions{display:flex;gap:8px}
 
 .layout{display:flex;gap:22px;max-width:1080px;margin:0 auto;padding:18px 16px 40px;align-items:flex-start}
@@ -212,7 +210,16 @@ select{width:100%;background:var(--surface);color:var(--text);border:1px solid v
 </style></head>
 <body>
 <header class="topbar">
-  <div class="brand"><span class="logo"><i></i><i></i></span>Checards</div>
+  <div class="brand"><svg class="logo" width="26" height="26" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Checards ace square logo">
+  <rect x="2" y="2" width="60" height="60" rx="13" fill="#174E9A"/>
+  <path d="M2 15A13 13 0 0 1 15 2h17v30H2Z" fill="#2368B7"/>
+  <path d="M32 32h30v17a13 13 0 0 1-13 13H32Z" fill="#2368B7"/>
+  <rect x="13" y="7" width="38" height="50" rx="5" fill="#FFF"/>
+  <path d="M32 17C27 23 20 29 20 35a7 7 0 0 0 12 5 7 7 0 0 0 12-5c0-6-7-12-12-18Z" fill="#17243B"/>
+  <path d="M29 39h6l3 8H26Z" fill="#17243B"/>
+  <path d="m20 14 4 5-4 5-4-5Z" fill="#D8404D"/>
+  <path d="m44 40 4 5-4 5-4-5Z" fill="#D8404D"/>
+</svg>Checards</div>
   <div class="top-actions">
     <button class="btn ghost" id="helpBtn" type="button">How to play</button>
     <button class="btn primary" id="newgTop" type="button">New game</button>
