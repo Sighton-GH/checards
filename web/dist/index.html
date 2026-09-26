@@ -770,6 +770,12 @@ function renderSetupHand(){
   H.classList.remove('hidden');
 }
 let handDrag=null, pendingSetupDrop=null, suppressHandClick=false;
+function setupDropSquare(x,y){
+  const sq=document.elementFromPoint(x,y)?.closest('.sq');
+  if(!sq||!S||!['setup_place','setup_draft'].includes(S.phase))return null;
+  const cx=+sq.dataset.x,cy=+sq.dataset.y;
+  return ((S.human===0&&cy<=2)||(S.human===1&&cy>=4))&&!cell(cx,cy).length?sq:null;
+}
 function startHandDrag(e,index){
   if(e.button!==0||onlinePending||!onlineConnected)return;
   handDrag={id:e.pointerId,index,startX:e.clientX,startY:e.clientY,source:e.currentTarget,ghost:null};
@@ -782,7 +788,7 @@ window.addEventListener('pointermove',e=>{
   }
   d.ghost.style.left=e.clientX+'px';d.ghost.style.top=e.clientY+'px';
   document.querySelectorAll('.sq.drop-target').forEach(s=>s.classList.remove('drop-target'));
-  const sq=document.elementFromPoint(e.clientX,e.clientY)?.closest('.sq.dest');
+  const sq=setupDropSquare(e.clientX,e.clientY);
   if(sq)sq.classList.add('drop-target');
 });
 window.addEventListener('pointerup',e=>{
@@ -791,7 +797,7 @@ window.addEventListener('pointerup',e=>{
   if(!d.ghost)return;
   suppressHandClick=true;queueMicrotask(()=>setTimeout(()=>{suppressHandClick=false},0));
   d.ghost.remove();document.querySelectorAll('.sq.drop-target').forEach(s=>s.classList.remove('drop-target'));
-  const sq=document.elementFromPoint(e.clientX,e.clientY)?.closest('.sq.dest');
+  const sq=setupDropSquare(e.clientX,e.clientY);
   if(!sq)return;
   const x=+sq.dataset.x,y=+sq.dataset.y;
   if(d.index===null)click(x,y);
