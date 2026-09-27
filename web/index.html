@@ -82,7 +82,17 @@ body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-a
 .who .nm{font-weight:650;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .who .sub{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pbar .sp{flex:1}
-.dead{display:flex;align-items:center;flex-wrap:wrap;gap:2px;justify-content:flex-end;max-width:52%}
+/* Keep both losses together instead of splitting them across the player panels. */
+.losses{min-width:0;padding:9px 10px;border:1px solid var(--line);border-radius:9px;background:var(--panel);margin:0 0 10px}
+.losses-title{font-size:12px;font-weight:750;margin-bottom:6px}
+.loss-row{display:grid;grid-template-columns:74px minmax(0,1fr);align-items:center;gap:5px;min-height:48px}
+.loss-row+.loss-row{border-top:1px solid var(--line);padding-top:5px;margin-top:5px}
+.loss-label{font-size:11px;line-height:1.25;font-weight:650;color:var(--muted)}
+.loss-count{display:block;color:var(--text);font-size:12px;font-weight:750}
+.loss-cards{display:flex;align-items:center;gap:3px;min-width:0;overflow-x:auto;padding:2px 1px 5px;scrollbar-width:thin}
+.loss-cards .pc{font-size:13px}
+.loss-empty{font-size:11px;color:var(--muted);white-space:nowrap}
+@media(max-width:920px){.board-col>.losses{margin:9px 0 0}}
 .pile{display:flex;align-items:center;gap:5px;color:var(--muted);font-size:12px;font-weight:650;flex:0 0 auto}
 
 /* The board owns the main column; the tray follows it and the sidebar carries status. */
@@ -99,7 +109,6 @@ body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-a
   .board-col>.pbar{flex-direction:column;align-items:center;justify-content:center;text-align:center;align-self:center;gap:7px;min-width:0}
   .board-col>.pbar .who .nm,.board-col>.pbar .who .sub{white-space:normal}
   .board-col>.pbar .sp{display:none}
-  .board-col>.pbar .dead{max-width:100%;justify-content:center}
   .board-col>.pbar .pile{justify-content:center}
   .board-col>.pbar .turn-badge{font-size:10px;padding:3px 5px}
   .side .topbar{display:flex;flex-direction:column;align-items:stretch;gap:10px;border:1px solid var(--line);border-radius:10px;padding:11px;margin-bottom:10px}
@@ -347,6 +356,7 @@ select{width:100%;background:var(--surface);color:var(--text);border:1px solid v
   </section>
   <aside class="side" id="sidePanel">
     <div class="sidebar-header" id="sidebarHeader"></div>
+    <div class="losses" id="losses" aria-label="Cards lost by each player"></div>
     <div class="status" id="status" aria-live="polite">Loading engine&hellip;</div>
     <div class="actions" id="actions"></div>
     <div class="tabs" role="tablist">
@@ -640,7 +650,7 @@ function backHtml(owner,cls){return `<span class="pc back ${owner===0?'br':'bb'}
 function cardHtml(c){if(!c.name)return backHtml(c.owner);return faceHtml(c.name,'',c.owner,!!c.revealed)}
 const DECK=f=>{const su=f==0?['D','H']:['C','S'];const d=['Jkr*','A'+su[0],'A'+su[1]];for(const r of ['9','10','J','Q','K'])for(const x of su)d.push(r+x);return d};
 function mySetupCount(){let n=0;for(const t of S.board)for(const c of t)if(c.owner==S.human)n++;return n}
-function deadCards(){if(onlineGame)return [[],[]];const D=[[],[]];let L=[];try{L=JSON.parse(M.UTF8ToString(M._cg_log()))}catch(e){}
+function deadCards(){if(onlineGame)return onlineView?.dead||[[],[]];const D=[[],[]];let L=[];try{L=JSON.parse(M.UTF8ToString(M._cg_log()))}catch(e){}
   for(const ev of L)for(const c of (ev.combat||[])){const a=c.attacker,d=1-a;if(c.attackerDied)c.att.forEach(n=>D[a].push(n));if(c.defenderDied)c.def.forEach(n=>D[d].push(n))}
   return D}
 function positionPlayerBars(){
@@ -648,6 +658,9 @@ function positionPlayerBars(){
   const header=desktop?$('sidebarHeader'):document.body;
   if(desktop){if($('topbar').parentNode!==header)header.appendChild($('topbar'))}
   else if($('topbar').parentNode!==header)header.insertBefore($('topbar'),document.querySelector('main'));
+  const lossTarget=desktop?$('sidePanel'):$('boardWrap').parentNode;
+  const lossAnchor=desktop?$('status'):$('setupHand');
+  if($('losses').parentNode!==lossTarget||$('losses').nextElementSibling!==lossAnchor)lossTarget.insertBefore($('losses'),lossAnchor);
   const target=$('boardWrap').parentNode;
   if($('barTop').parentNode!==target){target.insertBefore($('barTop'),$('boardWrap'));target.insertBefore($('barBottom'),$('setupHand'))}
 }
@@ -695,22 +708,28 @@ function sqLabel(x,y,cards,cl){
   if(cl.includes('combat'))s+='Site of the last battle. ';
   return s}
 
+function renderLosses(D,h,ai,hb){
+  const rows=[[ai,h<0?'Black':'Opponent'],[hb,h<0?'Red':'You']];
+  $('losses').innerHTML='<div class="losses-title">Cards lost</div>'+rows.map(([side,label])=>
+    `<div class="loss-row"><div class="loss-label">${label}<span class="loss-count">${D[side].length} lost</span></div>`+
+    `<div class="loss-cards" aria-label="${label}: ${D[side].length} cards lost">${D[side].length?D[side].map(n=>faceHtml(n,'',side)).join(''):'<span class="loss-empty">None yet</span>'}</div></div>`
+  ).join('');
+}
 function renderBars(){
   const h=S.human,ai=h<0?1:1-h;
   const hb=h<0?0:h;
   const D=deadCards();
+  renderLosses(D,h,ai,hb);
   const modelShort=onlineGame?'Opponent':$('model').selectedOptions[0].textContent.split('(')[0].trim();
   $('barTop').innerHTML=
     `<span class="avatar ${ai==0?'fr':'fb'}">${ai==0?'\u2665':'\u2660'}</span>`+
     `<div class="who"><div class="nm">${modelShort}</div><div class="sub">${onlineGame?(onlinePresence?(onlinePresence[ai===0?'redOnline':'blackOnline']?'Online':'Offline'):'Connecting...'):$('iters').value+' sims per move'}</div></div>`+
     `<div class="sp"></div>`+
-    `<div class="dead" title="Cards the opponent has lost">${D[ai].map(n=>faceHtml(n,'xs',ai)).join('')}</div>`+
     `<div class="pile" title="Opponent draw pile">${backHtml(ai,'xs')}<span>&times;${S.draw[ai]}</span></div>`;
   $('barBottom').innerHTML=
     `<span class="avatar ${hb==0?'fr':'fb'}">${hb==0?'\u2665':'\u2660'}</span>`+
     `<div class="who"><div class="nm">${h===-1?'Red':'You'}</div><div class="sub">${h===-1?'Watching':h==0?'Red - moves first':'Black - moves second'}</div></div>`+
     `<div class="sp"></div>`+
-    `<div class="dead" title="Cards this side has lost">${D[hb].map(n=>faceHtml(n,'xs',hb)).join('')}</div>`+
     `<div class="pile" title="Draw pile">${backHtml(hb,'xs')}<span>&times;${S.draw[hb]}</span></div>`;
   const playing=S.phase=='play'&&onlineConnected&&!onlinePending;
   const myTurn=playing&&S.human>=0&&S.mover==S.human;

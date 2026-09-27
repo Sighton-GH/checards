@@ -166,9 +166,29 @@ export class GameRoom {
     await this.state.storage.put('replay', this.replay);
   }
 
+  // Combat reveals both stacks to everyone. Rebuild the public loss ledger from
+  // the neutral log on first access (including after a room hibernates), then
+  // reuse it until the next accepted action. Do not infer hidden card identities.
+  lossesFor(M) {
+    const actions = this.replay.actions.length;
+    if (this.lossesAt === actions) return this.losses;
+    const log = JSON.parse(M.ccall('cs_log', 'string', ['number', 'number'], [this.handle, -1]));
+    const dead = [[], []];
+    for (const ev of log) for (const c of ev.combat || []) {
+      if (c.attackerDied) dead[c.attacker].push(...c.att);
+      if (c.defenderDied) dead[1 - c.attacker].push(...c.def);
+    }
+    this.lossesAt = actions;
+    this.losses = dead;
+    return dead;
+  }
+
   stateFor(M, role) {
-    if (role === 'spec') return JSON.parse(M.ccall('cs_state_spec', 'string', ['number'], [this.handle]));
-    return JSON.parse(M.ccall('cs_state', 'string', ['number', 'number'], [this.handle, role === 'red' ? 0 : 1]));
+    const view = role === 'spec'
+      ? JSON.parse(M.ccall('cs_state_spec', 'string', ['number'], [this.handle]))
+      : JSON.parse(M.ccall('cs_state', 'string', ['number', 'number'], [this.handle, role === 'red' ? 0 : 1]));
+    view.dead = this.lossesFor(M);
+    return view;
   }
 
   broadcast(msg) {
