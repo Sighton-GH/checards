@@ -52,7 +52,6 @@ struct Game {
   bool logFirst = true;
   std::string model;
   int iters = 60;
-  uint64_t seed = 0;
   int plies = 0;
 };
 Game* G = nullptr;
@@ -67,11 +66,11 @@ std::string cardJ(const Card& c, bool show) {
   return o.str();
 }
 void logEv(const std::string& j) { G->log << (G->logFirst ? "" : ",\n") << j; G->logFirst = false; }
-std::string actJ(const Action& a) {
+std::string actJ(const Action& a, bool showCard = true) {
   std::ostringstream o;
   o << "{\"spawn\":" << (a.isSpawn ? 1 : 0) << ",\"from\":[" << (int)a.from.x << "," << (int)a.from.y << "],\"to\":["
     << (int)a.to.x << "," << (int)a.to.y << "],\"ord\":" << (int)a.ownerOrdinal << ",\"card\":\""
-    << (a.isSpawn ? std::string("") : rankName(a.cardRank) + std::string(1, suitChar(a.cardSuit))) << "\"}";
+    << (a.isSpawn || !showCard ? std::string("") : rankName(a.cardRank) + std::string(1, suitChar(a.cardSuit))) << "\"}";
   return o.str();
 }
 std::string eventsJ(const std::vector<CombatEvent>& ev) {
@@ -101,7 +100,7 @@ void startPlay() {
   std::ostringstream o; o << "{\"ev\":\"setup_done\",\"board\":[";
   bool first = true;
   for (int x = 0; x < kBoardSize; x++) for (int y = 0; y < kBoardSize; y++) for (int i = 0; i < b.grid[x][y].count; i++) {
-    o << (first ? "" : ",") << "{\"x\":" << x << ",\"y\":" << y << ",\"c\":" << cardJ(b.grid[x][y].cards[i], true) << "}"; first = false; }
+    o << (first ? "" : ",") << "{\"x\":" << x << ",\"y\":" << y << ",\"c\":" << cardJ(b.grid[x][y].cards[i], b.grid[x][y].cards[i].owner == G->human || b.grid[x][y].cards[i].revealed) << "}"; first = false; }
   o << "]}"; logEv(o.str());
 }
 
@@ -154,7 +153,7 @@ void step(Action action) {
   G->ai->observeExternalAction(action, wasAttack, mover, board, ctx, ended ? &events : nullptr);
   G->plies++;
   G->lastEvents = eventsJ(events);
-  logEv(std::string("{\"ev\":\"act\",\"mover\":") + std::to_string((int)mover) + ",\"a\":" + actJ(action) + ",\"spawned\":\"" + spawned +
+  logEv(std::string("{\"ev\":\"act\",\"mover\":") + std::to_string((int)mover) + ",\"a\":" + actJ(action, mover == G->human) + ",\"spawned\":\"" + (mover == G->human ? spawned : "") +
         "\",\"turnEnded\":" + (ended ? "1" : "0") + ",\"combat\":" + eventsJ(events) + "}");
   finishIfOver();
 }
@@ -164,7 +163,7 @@ Action aiChoose() { return G->pat ? G->pat->chooseAction(G->board, G->ctx) : G->
 extern "C" {
 int cg_new(const char* modelPath, int humanRed, int iters, unsigned seed) {
   delete G; G = new Game();
-  G->seed = seed; G->rng.seed(seed); G->iters = iters; G->model = modelPath;
+  G->rng.seed(seed); G->iters = iters; G->model = modelPath;
   std::mt19937 q(777); G->net = std::make_unique<Network>(q);
   std::string mp(modelPath); bool patient = mp.rfind("patient:", 0) == 0; if (patient) mp = mp.substr(8);
   bool ok = mp == "fresh" ? true : G->net->load(mp);
@@ -173,7 +172,7 @@ int cg_new(const char* modelPath, int humanRed, int iters, unsigned seed) {
   if (patient) { G->pat = std::make_unique<PatientActor>(G->aiF, G->net.get(), c, (uint64_t)seed * 2654435761ULL + 11); G->ai = &G->pat->inner.player; }
   else { G->aiOwn = std::make_unique<AIPlayer>(G->aiF, G->net.get(), c, (uint64_t)seed * 2654435761ULL + 11); G->ai = G->aiOwn.get(); }
   std::ostringstream o; o << "{\"ev\":\"start\",\"model\":\"" << modelPath << "\",\"humanSide\":\"" << (humanRed ? "red" : "black")
-    << "\",\"iters\":" << iters << ",\"seed\":" << seed << "}"; logEv(o.str());
+    << "\",\"iters\":" << iters << "}"; logEv(o.str());
   if (G->human == Faction::Black) G->ai->performSetup(G->board); // Red sets up first, as in playGame
   for (auto& cd : AIPlayer::fullPersonalDeck(G->human)) (cd.rank == RankVal::Ace ? G->setupQueue : G->draftPool).push_back(cd);
   nextSetupCard();
