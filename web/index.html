@@ -912,7 +912,30 @@ function describe(ev){
   if(ev.ev=='end')return `<div class="mv end">Game over - ${RES[ev.result]}</div>`;
   return null}
 
-function save(){if(!gameId)return;const all=JSON.parse(localStorage.getItem('checardsGames')||'{}');all[gameId]=JSON.parse(M.UTF8ToString(M._cg_log()));localStorage.setItem('checardsGames',JSON.stringify(all));$('saved').textContent=Object.keys(all).length+' game(s) saved in this browser.'}
+// Sanitize legacy browser saves too: games created before the engine fix contain
+// opponents' setup/move identities and the RNG seed. Never export them verbatim.
+function publicLog(log){
+  if(!Array.isArray(log))return [];
+  const human=log[0]?.humanSide=='red'?0:log[0]?.humanSide=='black'?1:-1;
+  return log.map(ev=>{
+    const copy=JSON.parse(JSON.stringify(ev));
+    if(copy.ev=='start')delete copy.seed;
+    if(copy.ev=='setup_done')for(const entry of (copy.board||[])){
+      const card=entry.c;
+      if(card&&card.owner!==human&&!card.revealed){delete card.name;delete card.rank;delete card.suit}
+    }
+    if(copy.ev=='act'&&copy.mover!==human){if(copy.a)copy.a.card='';copy.spawned=''}
+    return copy;
+  });
+}
+function savedGames(){
+  const all=JSON.parse(localStorage.getItem('checardsGames')||'{}');
+  for(const id of Object.keys(all))all[id]=publicLog(all[id]);
+  localStorage.setItem('checardsGames',JSON.stringify(all));
+  return all;
+}
+function save(){if(!gameId)return;const all=savedGames();all[gameId]=publicLog(JSON.parse(M.UTF8ToString(M._cg_log())));localStorage.setItem('checardsGames',JSON.stringify(all));$('saved').textContent=Object.keys(all).length+' game(s) saved in this browser.'}
+try{savedGames()}catch(e){/* storage can be disabled by the browser */}
 function download(name,obj){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(obj,null,1)],{type:'application/json'}));a.download=name;a.click()}
 
 function savePrefs(){try{localStorage.setItem('checardsUI',JSON.stringify({model:$('model').value,iters:$('iters').value,side:$('side').value}))}catch(e){}}
@@ -979,8 +1002,8 @@ $('music').onclick=()=>{
   // Reset when enabling so the selected loop starts at the beginning.
   if(musicOn){currentMusic=null;updateMusic()}else playMusic(null);
 };
-$('dl').onclick=()=>{if(onlineGame)return;download('checards-game-'+gameId+'.json',JSON.parse(M.UTF8ToString(M._cg_log())))};
-$('dlall').onclick=()=>download('checards-all-games.json',JSON.parse(localStorage.getItem('checardsGames')||'{}'));
+$('dl').onclick=()=>{if(onlineGame)return;download('checards-game-'+gameId+'.json',publicLog(JSON.parse(M.UTF8ToString(M._cg_log()))))};
+$('dlall').onclick=()=>download('checards-all-games.json',savedGames());
 window.addEventListener('resize',()=>{positionPlayerBars();setSq()});
 
 function autotest(n){let k=0;const tick=()=>{S=st();if(k++>=n||S.phase=='over'){render();return}
