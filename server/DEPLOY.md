@@ -80,12 +80,36 @@ account, no cross-room power), and a room's tokens die with the room. If we
 ever add accounts or persistent identity, move the token to a subprotocol or
 header during the WS handshake.
 
-### Accepted residual: engine handles across DO eviction
+### Room lifecycle and diagnostics
 
-`getEngine()` caches one wasm instance per isolate, and `cs_new` handles live
-in that shared heap. A Durable Object evicted while its isolate survives
-cannot free its old handle (the handle value dies with the DO), so each cold
-start leaks one Game's heap. Impact is self-bounding (tens of KB per
-eviction, reclaimed when the isolate recycles). The clean fix - persisting
-the handle id in DO storage and freeing on re-init - is deliberately not
-taken yet.
+Rooms use the Durable Objects WebSocket Hibernation API. Socket role/token
+attachments are restored after hibernation; engine state is rebuilt from the
+persisted seed and accepted actions. Each room owns a separate WASM instance,
+so eviction does not leave a game handle in a shared module heap.
+
+Accepted setup/play actions reset a one-hour inactivity alarm. Pings, joins,
+spectators, and presence changes do not extend it. Game end schedules a
+30-second final-state grace period. Cleanup closes sockets with code 4000,
+unregisters public rooms, and deletes room data. The client stops reconnecting
+on terminal closes and caps consecutive failed reconnects at eight.
+
+No Durable Object migration or wrangler.toml change is needed. Existing idle
+rooms written by the old version have no alarm; on their next access the new
+version checks their old creation timestamp and expires them if overdue.
+There is no enumeration/backfill of old unaccessed room storage in this patch.
+Old connected clients may need to reload after deployment to use the new
+terminal-close behavior.
+
+Room errors are captured as a bounded last-ten ledger of timestamp, stage,
+exception kind, and generic code. Raw exception strings, stacks, message
+payloads, URLs, and tokens are not stored. Inspect a live room using:
+
+```sh
+curl -H "Authorization: Bearer $ROOM_CREATOR_TOKEN" \
+  https://checards.sighton.ca/api/rooms/$ROOM_CODE/errors
+```
+
+Only the room creator's token is accepted. Diagnostics are deleted with the
+room. Storage failures can prevent persistence; console fallback still emits
+safe stage/kind/code, but requires Workers Logs to view. Historical dashboard
+errors cannot be recovered with this patch.

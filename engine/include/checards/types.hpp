@@ -11,7 +11,7 @@
 //     each per suit). Ranks 2-8 do not exist in this game by design.
 //   - Red = Diamonds + Hearts. Black = Clubs + Spades. Red always sets up
 //     first and always moves first.
-//   - Max stack height is 4. A turn spends exactly 3 move-points (unless a
+//   - Max friendly stack height is 4 per side (a contested tile can hold 8). A turn spends exactly 3 move-points (unless a
 //     spawn is chosen, which consumes the whole turn as a single action, or
 //     the player is completely out of legal moves).
 // =============================================================================
@@ -26,7 +26,8 @@ namespace checards {
 // Board / turn constants
 // ---------------------------------------------------------------------------
 constexpr int kBoardSize      = 7;
-constexpr int kMaxStack       = 4;
+constexpr int kMaxStack       = 4; // maximum cards belonging to one faction on a tile
+constexpr int kMaxTileCards   = 2 * kMaxStack; // both factions can occupy a contested tile
 constexpr int kMovesPerTurn   = 3;
 constexpr int kStartingHand   = 7;   // 2 mandatory aces + 5 drafted cards
 constexpr int kPersonalDeck   = 13;  // Joker + 2 Aces + 10 high cards

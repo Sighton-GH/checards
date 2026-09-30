@@ -16,7 +16,7 @@ namespace checards {
 
 class Tile {
 public:
-    std::array<Card, kMaxStack> cards{};
+    std::array<Card, kMaxTileCards> cards{};
     uint8_t count = 0;
 
     bool empty() const { return count == 0; }
@@ -33,9 +33,9 @@ public:
         return false;
     }
 
-    // Returns false if the tile is already at kMaxStack capacity.
+    // Returns false if the tile is already at kMaxTileCards physical capacity.
     bool push(const Card& c) {
-        if (count >= kMaxStack) return false;
+        if (count >= kMaxTileCards) return false;
         cards[count++] = c;
         return true;
     }
@@ -141,12 +141,11 @@ public:
         int friendlyAtDest = dst.countOwner(mover);
         if (friendlyAtDest >= kMaxStack) return false;
         Tile& src = at(from);
-        if (!src.removeIdentity(r, s, mover)) return false;
-        Card moved(r, s, mover);
-        // Preserve isInitial/revealed flags of the card we just removed.
-        // removeIdentity already dropped them, so re-find is wasteful; instead
-        // callers that need flag-preservation should use moveCardPreserving().
-        dst.push(moved);
+        bool present = false;
+        for (int i = 0; i < src.count; i++)
+            if (src.cards[i].rank == r && src.cards[i].suit == s && src.cards[i].owner == mover) { present = true; break; }
+        if (!present || !dst.push(Card(r, s, mover))) return false;
+        src.removeIdentity(r, s, mover);
         return true;
     }
 
@@ -166,8 +165,8 @@ public:
             }
         }
         if (!ok) return false;
+        if (!dst.push(found)) return false;
         src.removeIdentity(r, s, mover);
-        dst.push(found);
         return true;
     }
 

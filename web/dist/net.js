@@ -137,11 +137,15 @@ export class RoomSession {
       ws.onerror = () => {
         if (!welcomed) fail(new Error('Could not connect to the room.'));
       };
-      ws.onclose = () => {
+      ws.onclose = event => {
         if (ws !== this.socket) return;
         this.socket = null;
         if (!welcomed) fail(new Error('Could not connect to the room.'));
         if (this.closed) return;
+        if (event.code === 4000 || this.view?.gamePhase === 'over' || this.retries >= 8) {
+          this._emit('error', event.code === 4000 ? 'Room ended or expired.' : 'Connection stopped. Rejoin manually to retry.');
+          this.close(); return;
+        }
         this.status = 'disconnected';
         this._emit('connection', this.status);
         // No action queue: a move whose acknowledgement was lost must be

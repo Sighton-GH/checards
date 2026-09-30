@@ -8,41 +8,29 @@ import engineWasm from '../../dist/checards-server.wasm';
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Headers': 'Content-Type,Authorization',
 };
 const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { 'Content-Type': 'application/json', ...CORS } });
 
-let enginePromise = null;
-function getEngine() {
-  if (!enginePromise) {
-    // Module workers have WorkerGlobalScope but no self.location; the
-    // emscripten glue reads self.location.href for script resolution (unused
-    // with SINGLE_FILE), so give it a harmless value.
-    if (typeof self !== 'undefined' && !self.location) self.location = { href: 'https://checards.worker/' };
-    // workerd also exposes process.versions.node (nodejs_compat), which makes
-    // the emscripten glue mispick its Node branch (require/__dirname). Hide
-    // process for the duration of module init so it takes the worker branch.
-    const proc = globalThis.process;
-    try {
-      if (proc && proc.versions && proc.versions.node) globalThis.process = undefined;
-      // Cloudflare Workers forbid runtime wasm compilation from bytes; the
-      // wasm ships as a CompiledWasm module binding instead, and we hand the
-      // glue a pre-compiled WebAssembly.Module via instantiateWasm.
-      enginePromise = ChecardsServer({
-        instantiateWasm(imports, cb) {
-          WebAssembly.instantiate(engineWasm, imports)
-            .then(inst => cb(inst.instance ?? inst))
-            .catch(err => { throw err; });
-          return {};
-        },
-      });
-    } finally {
-      globalThis.process = proc;
-    }
-  }
-  return enginePromise;
+async function getEngine() {
+  // A separate WASM instance per room avoids orphaned shared-heap handles on hibernation.
+  if (typeof self !== 'undefined' && !self.location) self.location = { href: 'https://checards.worker/' };
+  const proc = globalThis.process;
+  try {
+    if (proc?.versions?.node) globalThis.process = undefined;
+    return ChecardsServer({
+      instantiateWasm(imports, cb) {
+        const compiled = new WebAssembly.Instance(engineWasm, imports);
+        cb(compiled);
+        return compiled.exports;
+      },
+    });
+  } finally { globalThis.process = proc; }
 }
+const ROOM_IDLE_MS = 60 * 60 * 1000;
+const END_GRACE_MS = 30 * 1000;
+const TERMINAL_CLOSE = 4000;
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 function roomCode() {
   let s = '';
@@ -73,6 +61,7 @@ export default {
         body: JSON.stringify({ code, visibility, creatorSide: side }),
       });
       const init = await res.json();
+      if (!res.ok) return json(init, res.status);
       if (visibility === 'public') {
         await env.LOBBY.get(env.LOBBY.idFromName('lobby'))
           .fetch('https://lobby/register', { method: 'POST', body: JSON.stringify({ code }) });
@@ -85,12 +74,16 @@ export default {
       return json(await res.json());
     }
 
+    const diagnostics = url.pathname.match(/^\/api\/rooms\/([A-Z0-9]{6})\/errors$/);
+    if (diagnostics) {
+      return env.ROOM.get(env.ROOM.idFromName(diagnostics[1]))
+        .fetch(new Request('https://room/errors', request));
+    }
     const m = url.pathname.match(/^\/api\/rooms\/([A-Z0-9]{6})$/);
     if (m && request.method === 'GET') {
       const stub = env.ROOM.get(env.ROOM.idFromName(m[1]));
       const res = await stub.fetch('https://room/info');
-      if (res.status === 404) return json({ error: 'no such room' }, 404);
-      return json(await res.json());
+      return json(await res.json(), res.status);
     }
 
     const w = url.pathname.match(/^\/ws\/rooms\/([A-Z0-9]{6})$/);
@@ -112,6 +105,10 @@ export class GameRoom {
     this.state = state;
     this.env = env;
     this.sessions = new Map(); // ws -> { role: 'red'|'black'|'spec', token }
+    for (const ws of state.getWebSockets()) {
+      const session = ws.deserializeAttachment();
+      if (session) this.sessions.set(ws, session);
+    }
     this.meta = null;          // { code, visibility, tokens: {red, black}, createdAt }
   }
 
@@ -129,10 +126,10 @@ export class GameRoom {
   // can never see or corrupt each other's state.
   async engine() {
     if (this.M) return this.M;
-    const M = await getEngine();
-    // Residual, accepted: if this DO is evicted while the isolate's cached
-    // wasm module survives, the old handle stays allocated in the shared
-    // heap (self-bounding; reclaimed on isolate recycle). See DEPLOY.md.
+    let M;
+    try { M = await getEngine(); }
+    catch (e) { await this.captureError('engine_init', e); throw e; }
+    // Each room owns its WASM instance; hibernation can reclaim the entire heap.
     this.replay = (await this.state.storage.get('replay')) || { seed: (Date.now() & 0x7fffffff) >>> 0, actions: [] };
     const h = M.ccall('cs_new', 'number', ['number'], [this.replay.seed]);
     this.M = M;
@@ -148,6 +145,7 @@ export class GameRoom {
       try { M.ccall('cs_free', 'void', ['number'], [h]); } catch {}
       this.M = null;
       this.handle = 0;
+      await this.captureError('engine_replay', e);
       throw e;
     }
     return this.M;
@@ -163,7 +161,90 @@ export class GameRoom {
 
   async record(a) {
     this.replay.actions.push(a);
-    await this.state.storage.put('replay', this.replay);
+    this.meta.lastActionAt = Date.now();
+    await this.state.storage.transaction(async tx => {
+      await tx.put({ replay: this.replay, meta: this.meta });
+      await tx.setAlarm(this.meta.lastActionAt + ROOM_IDLE_MS);
+    });
+  }
+
+  async captureError(stage, error) {
+    // Never persist raw exception text, payloads, URLs, or authentication tokens.
+    const kind = ['TypeError', 'RangeError', 'SyntaxError', 'RuntimeError'].includes(error?.name) ? error.name : 'Error';
+    console.error(JSON.stringify({ source: 'GameRoom', stage, kind, code: 'room_failure' }));
+    try {
+      const errors = (await this.state.storage.get('errors')) || [];
+      errors.push({ at: Date.now(), stage, kind, code: 'room_failure' });
+      await this.state.storage.put('errors', errors.slice(-10));
+    } catch { /* storage failures must not cause recursive logging */ }
+  }
+
+  async expire() {
+    const meta = await this.loadMeta();
+    for (const ws of this.sessions.keys()) {
+      try { ws.close(TERMINAL_CLOSE, 'Room ended or expired'); } catch {}
+    }
+    if (meta?.visibility === 'public') {
+      await this.env.LOBBY.get(this.env.LOBBY.idFromName('lobby'))
+        .fetch('https://lobby/unregister', { method: 'POST', body: JSON.stringify({ code: meta.code }) });
+    }
+    this.sessions.clear();
+    try { if (this.M && this.handle) this.M.ccall('cs_free', 'void', ['number'], [this.handle]); } catch {}
+    this.M = null; this.handle = 0; this.meta = null; this.replay = null;
+    await this.state.storage.deleteAll();
+    await this.state.storage.deleteAlarm();
+  }
+
+  async alarm() {
+    return this.state.blockConcurrencyWhile(() => this.handleAlarm());
+  }
+
+  async handleAlarm() {
+    try {
+      const meta = await this.loadMeta();
+      if (!meta) return;
+      const due = meta.endAt || (meta.lastActionAt || meta.createdAt) + ROOM_IDLE_MS;
+      if (Date.now() < due) { await this.state.storage.setAlarm(due); return; }
+      await this.expire();
+    } catch (e) { await this.captureError('alarm', e); throw e; }
+  }
+
+  async webSocketMessage(ws, message) {
+    return this.state.blockConcurrencyWhile(() => this.handleMessage(ws, message));
+  }
+
+  async handleMessage(ws, message) {
+    try {
+      const meta = await this.loadMeta();
+      if (!meta) { ws.close(TERMINAL_CLOSE, 'Room expired'); return; }
+      if (Date.now() >= (meta.endAt || (meta.lastActionAt || meta.createdAt) + ROOM_IDLE_MS)) {
+        await this.expire(); return;
+      }
+      let msg;
+      try { msg = JSON.parse(message); } catch { return; }
+      const sess = this.sessions.get(ws);
+      if (!sess) { ws.close(TERMINAL_CLOSE, 'Session unavailable'); return; }
+      await this.onMessage(ws, sess, msg);
+    } catch (e) {
+      await this.captureError('message', e);
+      try { ws.send(JSON.stringify({ t: 'error', msg: 'Room operation failed.' })); } catch {}
+    }
+  }
+
+  webSocketClose(ws) { this.sessions.delete(ws); this.broadcastPresence(); }
+  async webSocketError(ws) {
+    this.sessions.delete(ws);
+    await this.captureError('socket');
+    this.broadcastPresence();
+  }
+
+  async fetch(request) {
+    return this.state.blockConcurrencyWhile(() => this.safeFetch(request));
+  }
+
+  async safeFetch(request) {
+    try { return await this.handleFetch(request); }
+    catch (e) { await this.captureError('fetch', e); return json({ error: 'Room operation failed.' }, 500); }
   }
 
   // Combat reveals both stacks to everyone. Rebuild the public loss ledger from
@@ -202,7 +283,11 @@ export class GameRoom {
     for (const [ws, sess] of this.sessions) {
       try {
         ws.send(JSON.stringify({ t: 'state', view: this.stateFor(M, sess.role) }));
-      } catch { this.sessions.delete(ws); }
+      } catch (e) {
+        this.state.waitUntil(this.captureError('state_or_send', e));
+        try { ws.close(1011, 'Room operation failed'); } catch {}
+        this.sessions.delete(ws);
+      }
     }
     this.broadcastPresence();
   }
@@ -217,7 +302,7 @@ export class GameRoom {
     this.broadcast({ t: 'presence', redOnline: red, blackOnline: black, spectators: spec });
   }
 
-  async fetch(request) {
+  async handleFetch(request) {
     const url = new URL(request.url);
 
     if (url.pathname === '/init' && request.method === 'POST') {
@@ -225,13 +310,35 @@ export class GameRoom {
       const side = creatorSide === 'random' ? (Math.random() < 0.5 ? 'red' : 'black') : creatorSide;
       const token = crypto.randomUUID();
       this.meta = {
-        code, visibility, createdAt: Date.now(),
+        code, visibility, createdAt: Date.now(), lastActionAt: Date.now(),
         tokens: { [side]: token },          // other side's token is minted on join
         creatorSide: side,
       };
       await this.state.storage.put('meta', this.meta);
+      await this.state.storage.setAlarm(this.meta.lastActionAt + ROOM_IDLE_MS);
       await this.engine(); // start a fresh game
+      await this.state.storage.put('replay', this.replay);
       return json({ side, token });
+    }
+
+    if (url.pathname !== '/init') {
+      const meta = await this.loadMeta();
+      if (meta && Date.now() >= (meta.endAt || (meta.lastActionAt || meta.createdAt) + ROOM_IDLE_MS)) {
+        await this.expire();
+        return json({ error: 'Room expired' }, 410);
+      }
+      // Legacy rooms acquire their first cleanup alarm without extending activity.
+      if (meta && !(await this.state.storage.getAlarm())) {
+        await this.state.storage.setAlarm(meta.endAt || (meta.lastActionAt || meta.createdAt) + ROOM_IDLE_MS);
+      }
+    }
+    if (url.pathname === '/errors') {
+      const meta = await this.loadMeta();
+      if (!meta) return json({ error: 'no such room' }, 404);
+      const ownerToken = meta.tokens[meta.creatorSide];
+      if (!ownerToken || request.headers.get('Authorization') !== `Bearer ${ownerToken}`)
+        return json({ error: 'forbidden' }, 403);
+      return json({ errors: (await this.state.storage.get('errors')) || [] });
     }
 
     if (url.pathname === '/info') {
@@ -254,7 +361,7 @@ export class GameRoom {
 
       const pair = new WebSocketPair();
       const [client, server] = Object.values(pair);
-      server.accept();
+      this.state.acceptWebSocket(server);
 
       const token = url.searchParams.get('token') || '';
       // Explicit spectator flag: spectating never consumes a player seat.
@@ -270,18 +377,12 @@ export class GameRoom {
         if (role !== 'spec') await this.state.storage.put('meta', meta);
       }
       const sess = { role, token: role === 'spec' ? '' : meta.tokens[role] };
+      server.serializeAttachment(sess);
       this.sessions.set(server, sess);
       server.send(JSON.stringify({ t: 'welcome', role, room: meta.code, token: sess.token || undefined, visibility: meta.visibility }));
       server.send(JSON.stringify({ t: 'state', view: this.stateFor(M, role) }));
       this.broadcastPresence();
 
-      server.addEventListener('message', async ev => {
-        let msg;
-        try { msg = JSON.parse(ev.data); } catch { return; }
-        try { await this.onMessage(server, sess, msg); }
-        catch (e) { server.send(JSON.stringify({ t: 'error', msg: String(e && e.message || e) })); }
-      });
-      server.addEventListener('close', () => { this.sessions.delete(server); this.broadcastPresence(); });
       return new Response(null, { status: 101, webSocket: client });
     }
 
@@ -304,6 +405,11 @@ export class GameRoom {
     await this.record(action);
     this.broadcastState(M);
     const st = this.stateFor(M, 'spec');
+    if (st.gamePhase === 'over') {
+      this.meta.endAt = Date.now() + END_GRACE_MS;
+      await this.state.storage.put('meta', this.meta);
+      await this.state.storage.setAlarm(this.meta.endAt);
+    }
     if (st.gamePhase === 'over' && this.meta.visibility === 'public') {
       await this.env.LOBBY.get(this.env.LOBBY.idFromName('lobby'))
         .fetch('https://lobby/unregister', { method: 'POST', body: JSON.stringify({ code: this.meta.code }) });
