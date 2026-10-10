@@ -6,8 +6,10 @@ source ~/emsdk/emsdk_env.sh >/dev/null 2>&1
 mkdir -p web/dist
 em++ -std=c++17 -O3 -DNDEBUG -Iengine/include engine/src/board.cpp engine/src/combat.cpp engine/src/features.cpp engine/src/network.cpp engine/src/search.cpp engine/src/selfplay.cpp web/play_api.cpp \
   -o web/dist/engine.js -sMODULARIZE=1 -sEXPORT_NAME=CheckardsEngine -sALLOW_MEMORY_GROWTH=1 -sSTACK_SIZE=16MB -sINITIAL_MEMORY=64MB -sSINGLE_FILE=1 -sENVIRONMENT=web,worker,node \
-  -sEXPORTED_FUNCTIONS=_cg_new,_cg_place,_cg_draft,_cg_human_act,_cg_ai_step,_cg_state,_cg_log -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,UTF8ToString \
+  -sEXPORTED_FUNCTIONS=_cg_new,_cg_place,_cg_draft,_cg_human_act,_cg_ai_step,_cg_state,_cg_log,_cg_ai_state,_cg_ai_act,_cg_ai_setup -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,UTF8ToString \
   --embed-file web/models@/models
+# The search bot (web/bot/*.ts) is bundled to plain JS; it plays through cg_ai_state/cg_ai_act/cg_ai_setup.
+npx --yes esbuild@0.25.0 web/bot/bot.ts --bundle --format=iife --global-name=ChecardsBot --target=es2020 --minify --log-level=warning --outfile=web/dist/bot.js
 python3 - <<'PY'
 import re, base64, json
 h=open('web/index.html').read();e=open('web/dist/engine.js').read()
@@ -17,6 +19,9 @@ for key in ('menu','game','win','lose'):
                 for ext,mime in (('ogg','ogg'),('mp3','mpeg'))]
 astart=h.index('/*AUDIO_FILES*/');aend=h.index(';',astart)
 h=h[:astart]+json.dumps(audio,separators=(',',':'))+h[aend:]
+bot=open('web/dist/bot.js').read()
+assert '</script' not in bot.lower(), 'bot bundle would close its inline script tag'
+h=h.replace('/*BOT*/',bot,1)
 h=h.replace('/*ENGINE*/',e,1)
 # Inline the multiplayer assets so the single-file dist stays self-contained.
 css=open('web/lobby.css').read()
@@ -43,7 +48,8 @@ rm -rf web/dist/audio && cp -r web/audio web/dist/audio
 python3 - <<'PY'
 h=open('web/index.html').read()
 h=h.replace('<script>/*ENGINE*/</script>','<script src="./engine.js"></script>',1)
-assert '/*ENGINE*/' not in h
+h=h.replace('<script>/*BOT*/</script>','<script src="./bot.js"></script>',1)
+assert '/*ENGINE*/' not in h and '/*BOT*/' not in h
 open('web/dist/index.html','w').write(h)
 PY
 ls -la web/dist/checards-play.html

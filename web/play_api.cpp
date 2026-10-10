@@ -53,6 +53,7 @@ struct Game {
   std::string model;
   int iters = 60;
   int plies = 0;
+  bool aiCustomSetup = false; // cg_ai_setup supplied the AI's opening placement
 };
 Game* G = nullptr;
 std::string out;
@@ -109,7 +110,7 @@ void nextSetupCard() {
   if (G->drafted < 5) { G->hasPending = false; G->phase = "setup_draft"; return; }
   // human setup finished
   G->hasPending = false;
-  if (G->human == Faction::Red) G->ai->performSetup(G->board);
+  if (G->human == Faction::Red && !G->aiCustomSetup) G->ai->performSetup(G->board);
   startPlay();
 }
 
@@ -158,6 +159,31 @@ void step(Action action) {
   finishIfOver();
 }
 Action aiChoose() { return G->pat ? G->pat->chooseAction(G->board, G->ctx) : G->ai->chooseTurnAction(G->board, G->ctx); }
+// State JSON as seen by `view`: its own cards and revealed cards are named,
+// and its legal actions are listed when it is the mover.
+std::string stateJ(Faction view) {
+  std::ostringstream o;
+  const Board& b = G->board;
+  o << "{\"phase\":\"" << G->phase << "\",\"human\":" << (int)view << ",\"mover\":" << (int)G->ctx.mover
+    << ",\"movesRemaining\":" << G->ctx.movesRemaining << ",\"turn\":" << b.currentTurnNumber
+    << ",\"draw\":[" << b.drawPileSize[0] << "," << b.drawPileSize[1] << "],\"result\":" << (int)b.endCondition
+    << ",\"inactivity\":" << b.inactivityPlies << ",\"board\":[";
+  bool over = G->phase == "over"; bool first = true;
+  for (int x = 0; x < kBoardSize; x++) for (int y = 0; y < kBoardSize; y++) {
+    o << (first ? "" : ",") << "["; first = false;
+    for (int i = 0; i < b.grid[x][y].count; i++) { const Card& c = b.grid[x][y].cards[i]; o << (i ? "," : "") << cardJ(c, over || c.owner == view || c.revealed); }
+    o << "]";
+  }
+  o << "],\"pending\":" << (G->hasPending && view == G->human ? "\"" + G->pending.name() + "\"" : std::string("null")) << ",\"pool\":[";
+  if (view == G->human) for (size_t i = 0; i < G->draftPool.size(); i++) o << (i ? "," : "") << "\"" << G->draftPool[i].name() << "\"";
+  o << "],\"legal\":[";
+  if (G->phase == "play" && G->ctx.mover == view) {
+    auto legal = generateLegalActions(b, G->ctx);
+    for (size_t i = 0; i < legal.size(); i++) o << (i ? "," : "") << actJ(legal[i]);
+  }
+  o << "],\"events\":" << (G->lastEvents.empty() ? "[]" : G->lastEvents) << "}";
+  return o.str();
+}
 } // namespace
 
 extern "C" {
@@ -203,28 +229,55 @@ int cg_ai_step() {
   step(a); return 1;
 }
 const char* cg_state() {
-  std::ostringstream o;
   if (!G) { out = "{}"; return out.c_str(); }
-  const Board& b = G->board;
-  o << "{\"phase\":\"" << G->phase << "\",\"human\":" << (int)G->human << ",\"mover\":" << (int)G->ctx.mover
-    << ",\"movesRemaining\":" << G->ctx.movesRemaining << ",\"turn\":" << b.currentTurnNumber
-    << ",\"draw\":[" << b.drawPileSize[0] << "," << b.drawPileSize[1] << "],\"result\":" << (int)b.endCondition
-    << ",\"inactivity\":" << b.inactivityPlies << ",\"board\":[";
-  bool over = G->phase == "over"; bool first = true;
-  for (int x = 0; x < kBoardSize; x++) for (int y = 0; y < kBoardSize; y++) {
-    o << (first ? "" : ",") << "["; first = false;
-    for (int i = 0; i < b.grid[x][y].count; i++) { const Card& c = b.grid[x][y].cards[i]; o << (i ? "," : "") << cardJ(c, over || c.owner == G->human || c.revealed); }
-    o << "]";
+  out = stateJ(G->human); return out.c_str();
+}
+// The AI seat's own view (its cards named, its legal actions listed). Used by
+// the in-page search bot, which then plays through cg_ai_act.
+const char* cg_ai_state() {
+  if (!G) { out = "{}"; return out.c_str(); }
+  out = stateJ(G->aiF); return out.c_str();
+}
+int cg_ai_act(int idx) {
+  if (!G || G->phase != "play" || G->ctx.mover != G->aiF) return 0;
+  auto legal = generateLegalActions(G->board, G->ctx);
+  if (legal.empty()) { step(Action{}); return 1; }
+  if (idx < 0 || idx >= (int)legal.size()) return 0;
+  step(legal[idx]); return 1;
+}
+// Replaces the AI's opening placement before play starts. `spec` is seven
+// "rank,suit,x,y" entries separated by ';': both Aces plus five other distinct
+// cards from the AI's own deck, each on a distinct empty square of its home
+// rows. The six unplaced cards become its draw pile, shuffled at play start
+// like any other setup. Returns 0 and changes nothing if the spec is invalid.
+int cg_ai_setup(const char* spec) {
+  if (!G || (G->phase != "setup_place" && G->phase != "setup_draft")) return 0;
+  const Faction f = G->aiF;
+  Board trial = G->board;
+  for (int x = 0; x < kBoardSize; x++) for (int y = 0; y < kBoardSize; y++) trial.grid[x][y].removeFaction(f);
+  std::vector<Card> deck = AIPlayer::fullPersonalDeck(f);
+  std::vector<bool> used(deck.size(), false);
+  std::istringstream in(spec ? spec : "");
+  std::string item;
+  int placed = 0, aces = 0;
+  while (std::getline(in, item, ';')) {
+    int r, s, x, y; char c1, c2, c3;
+    std::istringstream e(item);
+    if (!(e >> r >> c1 >> s >> c2 >> x >> c3 >> y) || c1 != ',' || c2 != ',' || c3 != ',') return 0;
+    size_t k = 0;
+    while (k < deck.size() && !(deck[k].rank == r && deck[k].suit == s)) k++;
+    if (k == deck.size() || used[k]) return 0;
+    Coordinate p{(int8_t)x, (int8_t)y};
+    if (x < 0 || x >= kBoardSize || y < 0 || y >= kBoardSize || !legalSetupSquare(trial, f, p)) return 0;
+    used[k] = true;
+    Card cd = deck[k]; cd.isInitial = true; trial.at(p).push(cd);
+    placed++; if (cd.rank == RankVal::Ace) aces++;
   }
-  o << "],\"pending\":" << (G->hasPending ? "\"" + G->pending.name() + "\"" : std::string("null")) << ",\"pool\":[";
-  for (size_t i = 0; i < G->draftPool.size(); i++) o << (i ? "," : "") << "\"" << G->draftPool[i].name() << "\"";
-  o << "],\"legal\":[";
-  if (G->phase == "play" && G->ctx.mover == G->human) {
-    auto legal = generateLegalActions(b, G->ctx);
-    for (size_t i = 0; i < legal.size(); i++) o << (i ? "," : "") << actJ(legal[i]);
-  }
-  o << "],\"events\":" << (G->lastEvents.empty() ? "[]" : G->lastEvents) << "}";
-  out = o.str(); return out.c_str();
+  if (placed != 7 || aces != 2) return 0;
+  trial.drawPileSize[factionIndex(f)] = (int)deck.size() - 7;
+  G->board = trial;
+  G->aiCustomSetup = true;
+  return 1;
 }
 const char* cg_log() { out = "[\n" + (G ? G->log.str() : std::string()) + "\n]"; return out.c_str(); }
 }
