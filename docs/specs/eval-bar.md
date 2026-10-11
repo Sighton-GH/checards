@@ -168,20 +168,44 @@ run independent searches and combine them weighted by iterations). Returns JSON:
    this (it maps `_cg_ai_state` to `_cg_state` and `_cg_ai_act` to
    `_cg_human_act`, and places the human formation via `cg_place`/`cg_draft`
    using `setupSpec`). Extend it rather than starting over.
-   Also generate **100 games** of the it32 net vs the search bot for variety.
+   **Calibrate on equal-strength games only.** The bar estimates the outcome
+   between evenly matched strong players. In mismatched games (e.g. it32 vs the
+   search bot, where the bot wins ~98%) the outcome is decided by the
+   mismatch, not the position, so they must not be used for fitting or for the
+   pass/fail ECE. (Revision 2: the first 300-game run mixed 100 such games in
+   and its ECE and temperature fit were invalid for that reason.)
 2. At every 3rd ply, take `cg_eval_snapshot()` (human seat), run
-   `cg_eval_run(800, seed)`, and record `(e, w, d, l, ply, outcome)`.
+   `cg_eval_run(800, seed)`, and record `(e, w, d, l, ply, mover, outcome)`.
+   **Every position must be sampled.** If a position cannot be snapshotted
+   (e.g. mid-turn `frozen` state), that is a snapshot bug to fix, not a sample
+   to skip: the live bar would be wrong or missing at exactly those positions.
 3. Report:
    - **Reliability table:** 10 bins of predicted E vs mean actual score, with
      counts.
    - **Expected calibration error (ECE)** over the bins.
    - **Brier score** for win prediction.
-4. **Pass:** ECE <= 0.05 and no bin with >= 50 samples off by more than 0.10.
-5. **If it fails:** fit a single temperature `T` on the logit of E
-   (`E' = sigmoid(logit(E) / T)`), minimising log-loss on half the data, check
-   ECE on the other half, and hard-code `T` in the worker with a comment
-   giving the date, game count and ECE before/after. Re-run whenever the
-   network file changes.
+   - **Discrimination:** AUC of E for wins vs losses, overall and by game stage
+     (plies 0-30, 30-90, 90-180, 180+).
+   - **Noise:** median |change in E| between consecutive samples, and the
+     same for a fixed position re-run with 5 different seeds.
+4. **Pass:** ECE <= 0.05 on held-out games and no bin with >= 50 samples off by
+   more than 0.10.
+5. **Calibration mapping (expected to be needed):** fit `T` and bias `b` on
+   `E' = sigmoid(logit(E) / T + b)` by log-loss on even game IDs; report
+   held-out ECE on odd game IDs; hard-code `T` and `b` in the worker with a
+   comment giving the date, game count and ECE before/after. Apply it to W/D/L
+   consistently: compute E' and scale W and L so that `W' + 0.5 D = E'` with D
+   unchanged. Re-run whenever the network file changes.
+   Reference result from the first run's 200 equal-strength games (re-analysed):
+   raw held-out ECE 0.093; with `T = 3.9, b = 0.04`, held-out ECE **0.032**
+   (pass). With the 5a smoothing (`k = 0.5`): raw 0.071, `T = 3.0, b = 0.02`,
+   held-out ECE **0.037** (pass). Expect similar values.
+5a. **Smoothing for display:** raw readings are noisy (successive changes are
+   anti-correlated, about -0.5, which is search noise rather than real swings).
+   Show an exponential moving average on the logit scale across positions in
+   the same game (`k = 0.5`, reset on new game), applied **before** the
+   calibration mapping, and fit `T`, `b` on the smoothed values. Never smooth
+   across a combat that removed an Ace (snap to the new value there).
 6. Commit the report as `docs/specs/eval-calibration.md`.
 
 ## 6. What the bar must not do
